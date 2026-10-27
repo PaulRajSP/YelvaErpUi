@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #fffbeb;
+  --color-primary-100: #fef3c7;
+  --color-primary-200: #fde68a;
+  --color-primary-300: #fcd34d;
+  --color-primary-400: #fbbf24;
+  --color-primary-500: #f59e0b;
+  --color-primary-600: #d97706;
+  --color-primary-700: #b45309;
+  --color-primary-800: #92400e;
+  --color-primary-900: #78350f;
+  --color-primary-950: #451a03;
+
+  --color-brand-yellow: #ffc107;
+  --color-brand-dark: #1e293b;
+  --font-sans: 'Inter', sans-serif;
+
+  /* Global Border Radius Tokens */
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-DEFAULT: 8px;
+  /* rounded    → used for small elements */
+  --radius-md: 8px;
+  /* rounded-md → standard inputs/buttons */
+  --radius-lg: 8px;
+  /* rounded-lg → standard cards/panels */
+  --radius-xl: 12px;
+  /* rounded-xl → large cards */
+  --radius-2xl: 16px;
+  /* rounded-2xl → section containers */
+  --radius-3xl: 24px;
+  /* rounded-3xl → modals/overlays */
+  --radius-full: 9999px;
+  /* rounded-full → pills/avatars */
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  @apply bg-[#f4f7f6] text-slate-800 antialiased selection:bg-brand-yellow/30 selection:text-slate-900;
+}
+
+button, [role="button"], input[type="submit"], input[type="button"], label.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Remove visible side scrollbars across the application while preserving smooth scrolling */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE & Edge */
+}
+
+::-webkit-scrollbar {
+  width: 0px !important;
+  height: 0px !important;
+  display: none !important;
+}
+
+.no-scrollbar,
+.hide-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.glass-card {
+  @apply bg-white border border-slate-200 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)];
+}

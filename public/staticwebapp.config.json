@@ -1,0 +1,24 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/assets/*",
+      "/favicon.svg",
+      "/icons.svg",
+      "/logo.png",
+      "*.{css,js,json,png,svg,jpg,jpeg,webp,ico}"
+    ]
+  },
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/index.html",
+      "statusCode": 200
+    }
+  },
+  "globalHeaders": {
+    "content-security-policy": "upgrade-insecure-requests;"
+  },
+  "mimeTypes": {
+    ".json": "text/json"
+  }
+}

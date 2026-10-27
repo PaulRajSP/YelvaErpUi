@@ -1,0 +1,779 @@
+{
+  "products": [
+    {
+      "id": "1",
+      "name": "Organic Forest Honey 250g",
+      "sku": "FH-250",
+      "mrp": 200,
+      "price": 160,
+      "prices": {
+        "DIRECT": 160,
+        "ONLINE": 150,
+        "WHOLESALE": 140
+      },
+      "mrps": {
+        "DIRECT": 200,
+        "ONLINE": 200,
+        "WHOLESALE": 200
+      },
+      "stock": 150,
+      "image": "",
+      "active": true,
+      "isCombo": false,
+      "allowedCustomerTypes": [
+        "DIRECT",
+        "ONLINE"
+      ],
+      "recipe": [
+        {
+          "materialId": "rm1",
+          "qty": 0.25,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm3",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm10",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm13",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm14",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm6",
+          "qty": 1,
+          "isPacking": true
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "Organic Forest Honey 500g",
+      "sku": "FH-500",
+      "mrp": 350,
+      "price": 290,
+      "prices": {
+        "DIRECT": 290,
+        "ONLINE": 280,
+        "WHOLESALE": 260
+      },
+      "mrps": {
+        "DIRECT": 350,
+        "ONLINE": 350,
+        "WHOLESALE": 350
+      },
+      "stock": 86,
+      "image": "",
+      "active": true,
+      "isCombo": false,
+      "allowedCustomerTypes": [
+        "DIRECT",
+        "ONLINE"
+      ],
+      "recipe": [
+        {
+          "materialId": "rm1",
+          "qty": 0.5,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm4",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm11",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm13",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm14",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm7",
+          "qty": 1,
+          "isPacking": true
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "Organic Forest Honey 1000g",
+      "sku": "FH-1000",
+      "mrp": 650,
+      "price": 550,
+      "prices": {
+        "DIRECT": 550,
+        "ONLINE": 530,
+        "WHOLESALE": 490
+      },
+      "mrps": {
+        "DIRECT": 650,
+        "ONLINE": 650,
+        "WHOLESALE": 650
+      },
+      "stock": 45,
+      "image": "",
+      "active": true,
+      "isCombo": false,
+      "allowedCustomerTypes": [
+        "DIRECT",
+        "ONLINE"
+      ],
+      "recipe": [
+        {
+          "materialId": "rm1",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm5",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm12",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm13",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm14",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm8",
+          "qty": 1,
+          "isPacking": true
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "name": "Honey Gift Combo (1000g + 250g)",
+      "sku": "FH-CMB-1",
+      "mrp": 900,
+      "price": 750,
+      "prices": {
+        "DIRECT": 750,
+        "ONLINE": 730,
+        "WHOLESALE": 680
+      },
+      "mrps": {
+        "DIRECT": 900,
+        "ONLINE": 900,
+        "WHOLESALE": 900
+      },
+      "stock": 30,
+      "image": "",
+      "active": true,
+      "isCombo": true,
+      "allowedCustomerTypes": [
+        "DIRECT",
+        "ONLINE",
+        "WHOLESALE"
+      ],
+      "recipe": [
+        {
+          "materialId": "rm1",
+          "qty": 1.25,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm5",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm3",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm12",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm10",
+          "qty": 1,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm13",
+          "qty": 2,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm14",
+          "qty": 2,
+          "isPacking": false
+        },
+        {
+          "materialId": "rm9",
+          "qty": 1,
+          "isPacking": true
+        }
+      ]
+    }
+  ],
+  "customers": [
+    {
+      "id": "c1",
+      "name": "Rahul Raj",
+      "mobile": "9876543210",
+      "email": "rahul@example.com",
+      "type": "DIRECT",
+      "totalOrders": 5,
+      "totalSpent": 1455
+    },
+    {
+      "id": "c2",
+      "name": "Anjali Sharma",
+      "mobile": "9123456789",
+      "email": "anjali@example.com",
+      "type": "ONLINE",
+      "totalOrders": 2,
+      "totalSpent": 640
+    },
+    {
+      "id": "c3",
+      "name": "Vikram Singh",
+      "mobile": "9988776655",
+      "email": "vikram@example.com",
+      "type": "WHOLESALE",
+      "totalOrders": 1,
+      "totalSpent": 320
+    },
+    {
+      "id": "c4",
+      "name": "Priya Patel",
+      "mobile": "9876543211",
+      "email": "priya@example.com",
+      "type": "DIRECT",
+      "totalOrders": 3,
+      "totalSpent": 960
+    },
+    {
+      "id": "c5",
+      "name": "Amit Kumar",
+      "mobile": "9123456788",
+      "email": "amit@example.com",
+      "type": "DIRECT",
+      "totalOrders": 1,
+      "totalSpent": 200
+    }
+  ],
+  "addresses": [
+    {
+      "id": "a1",
+      "customerId": "c1",
+      "addressType": "Home",
+      "recipientName": "Rahul Raj",
+      "houseStreet": "House Name, Street",
+      "areaLocality": "Trivandrum",
+      "landmark": "",
+      "city": "Trivandrum",
+      "district": "Trivandrum",
+      "state": "Kerala",
+      "pincode": "695001",
+      "deliveryInstructions": ""
+    },
+    {
+      "id": "a2",
+      "customerId": "c1",
+      "addressType": "Office",
+      "recipientName": "Rahul Raj",
+      "houseStreet": "Technopark, Technopark",
+      "areaLocality": "Kazhakootam",
+      "landmark": "",
+      "city": "Trivandrum",
+      "district": "Trivandrum",
+      "state": "Kerala",
+      "pincode": "695581",
+      "deliveryInstructions": ""
+    },
+    {
+      "id": "a3",
+      "customerId": "c2",
+      "addressType": "Home",
+      "recipientName": "Anjali Sharma",
+      "houseStreet": "A-204, MG Road",
+      "areaLocality": "Ernakulam",
+      "landmark": "",
+      "city": "Kochi",
+      "district": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682011",
+      "deliveryInstructions": ""
+    },
+    {
+      "id": "a4",
+      "customerId": "c3",
+      "addressType": "Home",
+      "recipientName": "Vikram Singh",
+      "houseStreet": "Villa 5, Bypass Road",
+      "areaLocality": "Kozhikode",
+      "landmark": "",
+      "city": "Kozhikode",
+      "district": "Kozhikode",
+      "state": "Kerala",
+      "pincode": "673004",
+      "deliveryInstructions": ""
+    }
+  ],
+  "orders": [
+    {
+      "id": "o1",
+      "orderNumber": "ORD1001",
+      "customerId": "c1",
+      "deliveryType": "DIRECT",
+      "deliveryAddress": {
+        "id": "a1",
+        "customerId": "c1",
+        "addressType": "Home",
+        "recipientName": "Rahul Raj",
+        "houseStreet": "House Name, Street",
+        "areaLocality": "Trivandrum",
+        "landmark": "",
+        "city": "Trivandrum",
+        "district": "Trivandrum",
+        "state": "Kerala",
+        "pincode": "695001",
+        "deliveryInstructions": ""
+      },
+      "items": [
+        {
+          "productId": "3",
+          "productNameSnapshot": "Honey 500g",
+          "weightSnapshot": "500g",
+          "unitPrice": 200,
+          "quantity": 1,
+          "isCombo": false,
+          "comboItems": []
+        }
+      ],
+      "subtotal": 200,
+      "deliveryCharge": 50,
+      "discount": 0,
+      "totalAmount": 250,
+      "paymentStatus": "PAID",
+      "status": "PACKING",
+      "createdAt": "2026-09-11T16:54:58.494Z",
+      "comments": [
+        {
+          "id": "1789490180744",
+          "text": "ddd\n\ndasd",
+          "createdAt": "2026-09-15T16:36:20.744Z",
+          "author": "Admin"
+        },
+        {
+          "id": "1789490183960",
+          "text": "dsdd",
+          "createdAt": "2026-09-15T16:36:23.960Z",
+          "author": "Admin"
+        },
+        {
+          "id": "1789490316492",
+          "text": "dsddd",
+          "createdAt": "2026-09-15T16:38:36.492Z",
+          "author": "Admin"
+        }
+      ],
+      "packages": [
+        {
+          "id": 1,
+          "length": "20",
+          "width": "15",
+          "height": "10",
+          "weight": "500",
+          "courier": "",
+          "tracking": "",
+          "assignedItems": [
+            {
+              "originalIndex": 0,
+              "qty": 1,
+              "productNameSnapshot": "Honey 500g",
+              "unitPrice": 200
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "o2",
+      "orderNumber": "ORD1002",
+      "customerId": "c2",
+      "deliveryType": "COURIER",
+      "deliveryAddress": {
+        "id": "a3",
+        "customerId": "c2",
+        "addressType": "Home",
+        "recipientName": "Anjali Sharma",
+        "houseStreet": "A-204, MG Road",
+        "areaLocality": "Ernakulam",
+        "landmark": "",
+        "city": "Kochi",
+        "district": "Ernakulam",
+        "state": "Kerala",
+        "pincode": "682011",
+        "deliveryInstructions": ""
+      },
+      "items": [
+        {
+          "productId": "4",
+          "productNameSnapshot": "Honey 1kg",
+          "weightSnapshot": "1kg",
+          "unitPrice": 320,
+          "quantity": 2,
+          "isCombo": false,
+          "comboItems": []
+        }
+      ],
+      "subtotal": 640,
+      "deliveryCharge": 50,
+      "discount": 50,
+      "totalAmount": 640,
+      "paymentStatus": "PAID",
+      "status": "READY TO SHIP",
+      "createdAt": "2026-09-13T16:54:58.494Z",
+      "packages": [
+        {
+          "id": 1,
+          "length": "",
+          "width": "",
+          "height": "",
+          "weight": "250",
+          "courier": "",
+          "tracking": "",
+          "assignedItems": [
+            {
+              "originalIndex": 0,
+              "qty": 2,
+              "productNameSnapshot": "Honey 1kg",
+              "unitPrice": 320
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "o3",
+      "orderNumber": "ORD1003",
+      "customerId": "c3",
+      "deliveryType": "COURIER",
+      "deliveryAddress": {
+        "id": "a4",
+        "customerId": "c3",
+        "addressType": "Home",
+        "recipientName": "Vikram Singh",
+        "houseStreet": "Villa 5, Bypass Road",
+        "areaLocality": "Kozhikode",
+        "landmark": "",
+        "city": "Kozhikode",
+        "district": "Kozhikode",
+        "state": "Kerala",
+        "pincode": "673004",
+        "deliveryInstructions": ""
+      },
+      "items": [
+        {
+          "productId": "6",
+          "productNameSnapshot": "Starter Combo",
+          "weightSnapshot": "1 pack",
+          "unitPrice": 320,
+          "quantity": 1,
+          "isCombo": true,
+          "comboItems": [
+            {
+              "name": "Honey 125g",
+              "qty": 1
+            },
+            {
+              "name": "Honey 500g",
+              "qty": 1
+            }
+          ]
+        }
+      ],
+      "subtotal": 200,
+      "deliveryCharge": 50,
+      "discount": 0,
+      "totalAmount": 250,
+      "paymentStatus": "PAID",
+      "status": "READY TO SHIP",
+      "createdAt": "2026-09-14T16:54:58.494Z"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "s1",
+      "name": "Forest Bee Farms",
+      "type": "FARM",
+      "contactName": "Rajesh",
+      "mobile": "9000111222",
+      "balance": 0
+    },
+    {
+      "id": "s2",
+      "name": "Packaging Solutions Ltd",
+      "type": "PACKAGING",
+      "contactName": "Manoj",
+      "mobile": "9000333444",
+      "balance": 1500
+    }
+  ],
+  "rawMaterials": [
+    {
+      "id": "rm1",
+      "name": "Organic Forest Honey",
+      "category": "HONEY",
+      "unit": "kg",
+      "stock": 120,
+      "reorderLevel": 20
+    },
+    {
+      "id": "rm2",
+      "name": "Multifloral Honey",
+      "category": "HONEY",
+      "unit": "kg",
+      "stock": 85,
+      "reorderLevel": 20
+    },
+    {
+      "id": "rm3",
+      "name": "250g Glass Bottle",
+      "category": "BOTTLE",
+      "unit": "pcs",
+      "stock": 500,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm4",
+      "name": "500g Glass Bottle",
+      "category": "BOTTLE",
+      "unit": "pcs",
+      "stock": 450,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm5",
+      "name": "1000g Glass Bottle",
+      "category": "BOTTLE",
+      "unit": "pcs",
+      "stock": 300,
+      "reorderLevel": 50
+    },
+    {
+      "id": "rm6",
+      "name": "250g Honey Box",
+      "category": "BOX",
+      "unit": "pcs",
+      "stock": 500,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm7",
+      "name": "500g Honey Box",
+      "category": "BOX",
+      "unit": "pcs",
+      "stock": 450,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm8",
+      "name": "1000g Honey Box",
+      "category": "BOX",
+      "unit": "pcs",
+      "stock": 300,
+      "reorderLevel": 50
+    },
+    {
+      "id": "rm9",
+      "name": "1000g + 250g Combo Box",
+      "category": "BOX",
+      "unit": "pcs",
+      "stock": 100,
+      "reorderLevel": 20
+    },
+    {
+      "id": "rm10",
+      "name": "250g Forest Honey Label",
+      "category": "LABEL",
+      "unit": "pcs",
+      "stock": 500,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm11",
+      "name": "500g Forest Honey Label",
+      "category": "LABEL",
+      "unit": "pcs",
+      "stock": 450,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm12",
+      "name": "1000g Forest Honey Label",
+      "category": "LABEL",
+      "unit": "pcs",
+      "stock": 300,
+      "reorderLevel": 50
+    },
+    {
+      "id": "rm15",
+      "name": "Standard Cap Seal Label",
+      "category": "CAP_LABEL",
+      "unit": "pcs",
+      "stock": 1000,
+      "reorderLevel": 200
+    },
+    {
+      "id": "rm16",
+      "name": "Premium Cap Seal Label",
+      "category": "CAP_LABEL",
+      "unit": "pcs",
+      "stock": 500,
+      "reorderLevel": 100
+    },
+    {
+      "id": "rm13",
+      "name": "Metal Cap",
+      "category": "CAP",
+      "unit": "pcs",
+      "stock": 1500,
+      "reorderLevel": 200
+    },
+    {
+      "id": "rm14",
+      "name": "Security Seal",
+      "category": "SEAL",
+      "unit": "pcs",
+      "stock": 2000,
+      "reorderLevel": 500
+    },
+    {
+      "id": "rm17",
+      "name": "Bubble Wrap",
+      "category": "PACKING_ITEM",
+      "unit": "meters",
+      "stock": 100,
+      "reorderLevel": 20
+    },
+    {
+      "id": "rm18",
+      "name": "Packing Tape",
+      "category": "PACKING_ITEM",
+      "unit": "rolls",
+      "stock": 50,
+      "reorderLevel": 10
+    }
+  ],
+  "purchases": [
+    {
+      "id": "p1",
+      "supplierId": "s1",
+      "date": "2026-09-04T16:54:58.494Z",
+      "items": [
+        {
+          "materialId": "rm1",
+          "qty": 100,
+          "rate": 250,
+          "total": 25000,
+          "batchRef": "B-FH-1"
+        }
+      ],
+      "totalAmount": 25000,
+      "status": "PAID"
+    },
+    {
+      "id": "p2",
+      "supplierId": "s2",
+      "date": "2026-09-09T16:54:58.494Z",
+      "items": [
+        {
+          "materialId": "rm4",
+          "qty": 500,
+          "rate": 12,
+          "total": 6000,
+          "batchRef": "B-BOT-500-1"
+        }
+      ],
+      "totalAmount": 6000,
+      "status": "UNPAID"
+    }
+  ],
+  "batches": [
+    {
+      "id": "b1",
+      "purchaseId": "p1",
+      "materialId": "rm1",
+      "batchNumber": "B-FH-1",
+      "date": "2026-09-04T16:54:58.494Z",
+      "qtyPurchased": 100,
+      "qtyRemaining": 60,
+      "costPerUnit": 250
+    },
+    {
+      "id": "b2",
+      "purchaseId": "p2",
+      "materialId": "rm4",
+      "batchNumber": "B-BOT-500-1",
+      "date": "2026-09-09T16:54:58.494Z",
+      "qtyPurchased": 500,
+      "qtyRemaining": 450,
+      "costPerUnit": 12
+    }
+  ],
+  "productions": [],
+  "transactions": [
+    {
+      "id": "txn-1",
+      "date": "2026-08-15T16:54:58.494Z",
+      "type": "CREDIT",
+      "category": "TOPUP",
+      "amount": 100000,
+      "description": "Initial Capital Top Up"
+    },
+    {
+      "id": "txn-2",
+      "date": "2026-09-04T16:54:58.494Z",
+      "type": "DEBIT",
+      "category": "PURCHASE",
+      "amount": 25000,
+      "description": "Payment for Purchase p1"
+    },
+    {
+      "id": "txn-3",
+      "date": "2026-09-09T16:54:58.494Z",
+      "type": "DEBIT",
+      "category": "PURCHASE",
+      "amount": 6000,
+      "description": "Payment for Purchase p2"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
