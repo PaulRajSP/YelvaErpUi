@@ -73,7 +73,7 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
             // apiClient unwraps the success envelope, so res IS the data object
             if (res && (res.batchNumber || res.batchEdid || res.edid)) {
                 const newBatchNumber = res.batchNumber;
-                
+
                 // Hit the API to fetch the updated list containing this specific batch
                 try {
                     const listRes = await purchaseApi.getBatchesForMaterial(materialEdid, newBatchNumber);
@@ -81,7 +81,7 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
                     if (listRes?.items && listRes.items.length > 0) {
                         batchToSelect = listRes.items[0];
                     }
-                    
+
                     if (batchToSelect) {
                         handleSelect(batchToSelect);
                     } else {
@@ -148,7 +148,7 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
                     {selectedBatch ? (
                         <span>{selectedBatch.batchNumber}</span>
                     ) : (
-                        <span className="text-slate-400 font-normal">e.g. 636355</span>
+                        <span className="text-slate-400 font-normal">e.g. 647788</span>
                     )}
                 </div>
                 {selectedBatch && !isActuallyDisabled && (

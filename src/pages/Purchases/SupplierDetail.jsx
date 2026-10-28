@@ -9,7 +9,7 @@ import { Tooltip } from '../../components/ui/Tooltip';
 import { Pagination } from '../../components/ui/Pagination';
 import { Dropdown } from '../../components/common/Dropdown';
 import DateRangePicker from '../../components/common/DateRangePicker';
-import { formatDateTime, formatFilterDateToUTC, PAGE_SIZE } from '../../common/utils';
+import { formatDate, formatDateTime, formatFilterDateToUTC, PAGE_SIZE } from '../../common/utils';
 import { purchaseApi } from '../../api/purchaseApi';
 
 const statusBadge = (status) => {
@@ -50,7 +50,7 @@ const PurchaseRow = ({ purchase, statusBadge }) => {
           </div>
         </td>
         <td className="px-5 py-4 font-medium text-slate-700 text-sm text-left">
-          {formatDateTime(purchase.date).split(' ').slice(0, 3).join(' ')}
+          {formatDate(purchase.date)}
         </td>
         <td className="px-5 py-4 font-bold text-slate-700 text-sm text-right">₹{parseFloat(purchase.totalAmount || 0).toLocaleString()}</td>
         <td className="px-5 py-4 font-bold text-emerald-600 text-sm text-right">₹{parseFloat(purchase.paidAmount || 0).toLocaleString()}</td>

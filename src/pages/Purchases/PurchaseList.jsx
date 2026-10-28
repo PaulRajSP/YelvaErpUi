@@ -14,7 +14,7 @@ import { Tooltip } from '../../components/ui/Tooltip';
 import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
-import { formatDateTime, formatFilterDateToUTC, PAGE_SIZE } from '../../common/utils';
+import { formatDate, formatDateTime, formatFilterDateToUTC, PAGE_SIZE } from '../../common/utils';
 
 export default function Purchases() {
   const { purchases, suppliers, rawMaterials, loadPurchases, loadSuppliers, loadRawMaterials, addSupplier, searchSuppliers } = useStore();
@@ -295,7 +295,7 @@ export default function Purchases() {
                   const balance = (purchase.totalAmount || 0) - (purchase.paidAmount || 0);
                   return (
                     <TableRow key={purchase.edid || purchase.id}>
-                      <TableCell>{formatDateTime(purchase.date)}</TableCell>
+                      <TableCell>{formatDate(purchase.date)}</TableCell>
                       <TableCell className="whitespace-nowrap">{purchase.publicId}</TableCell>
                       <TableCell className="font-medium">{purchase.supplierName || 'Unknown Supplier'}</TableCell>
                       <TableCell className="text-right font-bold text-slate-700">₹{parseFloat(purchase.totalAmount).toLocaleString()}</TableCell>

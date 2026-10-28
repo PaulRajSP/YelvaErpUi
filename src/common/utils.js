@@ -59,6 +59,13 @@ export const formatDateTime = (dateVal) => {
  */
 export const formatDate = (dateVal) => {
   if (!dateVal) return '';
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateVal.trim())) {
+    const [y, m, d] = dateVal.trim().split('T')[0].split('-').map(Number);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  }
   const dateObj = parseUTCToLocalDate(dateVal);
   if (!dateObj) return '';
   return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -112,7 +119,10 @@ export const PAGE_SIZE = 10;
  * E.g., "OrderPlaced" -> "Order Placed", "ReadyToShip" -> "Ready To Ship"
  */
 export const formatOrderStatus = (status) => {
-  if (!status) return '';
+  if (!status || typeof status !== 'string') return '';
+  if (status.length > 20 && !status.includes(' ') && !status.includes('_') && !status.includes('-')) {
+    return status;
+  }
   const clean = status.replace(/_/g, ' ');
   if (clean === clean.toUpperCase() && /[A-Z]/.test(clean)) {
     return clean

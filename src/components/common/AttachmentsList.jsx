@@ -8,11 +8,10 @@ export default function AttachmentsList({ attachments = [] }) {
 
     if (!attachments || attachments.length === 0) return null;
 
-    const docUrl = selectedDoc?.url || (
-        (selectedDoc?.edid || selectedDoc?.docEdid || selectedDoc?.id)
-            ? `${API_BASE}/common/attachment/${selectedDoc.edid || selectedDoc.docEdid || selectedDoc.id}`
-            : ''
-    );
+    const doc = selectedDoc?.attachmentData || selectedDoc;
+    const docName = doc?.documentOriginalName || doc?.documentOrginalName || doc?.name || doc?.fileName || 'document';
+    const docEdid = doc?.documentEdid || doc?.edid || doc?.docEdid || doc?.id;
+    const docUrl = doc?.url || (docEdid ? `${API_BASE}/common/attachment/${docEdid}/${encodeURIComponent(docName)}` : '');
 
     return (
         <div className="bg-white rounded-2xl p-6 border border-slate-200">
@@ -28,7 +27,7 @@ export default function AttachmentsList({ attachments = [] }) {
                     >
                         <div className="flex items-center gap-2 overflow-hidden min-w-0">
                             <Paperclip size={14} className="text-slate-400 group-hover:text-indigo-600 shrink-0 transition-colors" />
-                            <span className="text-xs font-medium text-slate-700 truncate">{file.name || 'Attachment ' + (idx + 1)}</span>
+                            <span className="text-xs font-medium text-slate-700 truncate">{file.name || file.documentOriginalName || file.attachmentData?.documentOriginalName || 'Attachment ' + (idx + 1)}</span>
                         </div>
                         <button
                             type="button"

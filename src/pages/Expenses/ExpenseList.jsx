@@ -194,11 +194,13 @@ export default function ExpenseList() {
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            if (data?.edid) {
+            const docEdid = data?.documentEdid || data?.edid;
+            const docName = data?.documentOriginalName || file.name;
+            if (docEdid) {
                 setFormData(prev => ({
                     ...prev,
-                    docEdid: data.edid,
-                    docFileName: file.name
+                    docEdid: docEdid,
+                    docFileName: docName
                 }));
             }
         } catch (err) {

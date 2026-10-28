@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     Truck, Phone, Mail, MapPin, CheckCircle2, XCircle,
     Edit2, FileText, Upload, Trash2, Printer, AlertCircle,
-    Plus, Loader2, ArrowLeft, Shield
+    Plus, Loader2, ArrowLeft, Shield, Eye
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import { Card } from '../../components/ui/Card';
@@ -11,6 +11,8 @@ import { Button } from '../../components/ui/Button';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Tooltip } from '../../components/ui/Tooltip';
+import DocumentViewModal from '../../components/common/DocumentViewModal';
+import { API_BASE } from '../../services/apiClient';
 import { courierApi } from '../../api/courierApi';
 import { commonApi } from '../../api/commonApi';
 
@@ -32,6 +34,7 @@ export default function CourierDetail() {
     const [courier, setCourier] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [viewDoc, setViewDoc] = useState(null);
 
     /* ── Edit modal state ─────────────────────────────────────────────── */
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -73,6 +76,7 @@ export default function CourierDetail() {
     /* ── Open edit modal ──────────────────────────────────────────────── */
     const openEdit = () => {
         if (!courier) return;
+        const attachment = courier.attachmentData || (courier.documentEdid ? { documentEdid: courier.documentEdid, documentOriginalName: courier.documentOriginalName } : null);
         setEditForm({
             name: courier.name || '',
             contactPerson: courier.contactPerson || '',
@@ -80,8 +84,8 @@ export default function CourierDetail() {
             email: courier.email || '',
             address: courier.address || '',
             isActive: courier.isActive !== false,
-            docEdid: courier.docEdid || null,
-            docFileName: courier.docEdid ? 'Attached Document' : '',
+            docEdid: attachment?.documentEdid || null,
+            docFileName: attachment?.documentOriginalName || (attachment?.documentEdid ? 'Attached Document' : ''),
             metadata: (courier.metadata || []).map(m => ({
                 id: m.id || 0, edid: m.edid || null,
                 label: m.label || '', value: m.value || '',
@@ -116,7 +120,10 @@ export default function CourierDetail() {
                 email: editForm.email?.trim() || null,
                 address: editForm.address?.trim() || null,
                 isActive: Boolean(editForm.isActive),
-                docEdid: editForm.docEdid || null,
+                attachmentData: editForm.docEdid ? {
+                    documentEdid: editForm.docEdid,
+                    documentOriginalName: editForm.docFileName || null
+                } : null,
                 metadata: cleanMeta
             });
             await fetchDetail();
@@ -150,8 +157,14 @@ export default function CourierDetail() {
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            if (data?.edid) {
-                setEditForm(p => ({ ...p, docEdid: data.edid, docFileName: file.name }));
+            const docEdid = data?.documentEdid || data?.edid;
+            const docOriginalName = data?.documentOriginalName || data?.documentOrginalName || file.name;
+            if (docEdid) {
+                setEditForm(p => ({
+                    ...p,
+                    docEdid,
+                    docFileName: docOriginalName
+                }));
             }
         } catch (err) {
             console.error(err);
@@ -358,19 +371,40 @@ export default function CourierDetail() {
                         <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                             <FileText size={12} className="text-indigo-500" /> Agreement / Document
                         </h4>
-                        {courier.docEdid ? (
-                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                                <FileText size={18} className="text-indigo-500 shrink-0" />
-                                <div className="text-xs min-w-0">
-                                    <div className="font-bold text-indigo-900">Document Attached</div>
-                                    <div className="text-[10px] text-indigo-500 font-mono truncate">{courier.docEdid.substring(0, 24)}…</div>
+                        {(() => {
+                            const doc = courier.attachmentData || (courier.documentEdid ? { documentEdid: courier.documentEdid, documentOriginalName: courier.documentOriginalName } : null);
+                            return doc?.documentEdid ? (
+                                <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <FileText size={18} className="text-indigo-500 shrink-0" />
+                                        <div className="text-xs min-w-0">
+                                            <div className="font-bold text-indigo-900 truncate">
+                                                {doc.documentOriginalName || 'Attached Document'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        icon={Eye}
+                                        onClick={() => {
+                                            const docName = doc.documentOriginalName || 'Agreement_Document';
+                                            setViewDoc({
+                                                url: `${API_BASE}/common/attachment/${doc.documentEdid}/${encodeURIComponent(docName)}`,
+                                                title: `${courier.name || 'Courier'} Agreement`,
+                                                fileName: docName
+                                            });
+                                        }}
+                                    >
+                                        View
+                                    </Button>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="p-3 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-medium">
-                                No document attached
-                            </div>
-                        )}
+                            ) : (
+                                <div className="p-3 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-medium">
+                                    No document attached
+                                </div>
+                            );
+                        })()}
                     </Card>
 
                     {/* Live Delivery Slip Preview */}
@@ -770,6 +804,15 @@ export default function CourierDetail() {
                     </div>
                 </form>
             </Modal>
+
+            {/* Document Preview Modal */}
+            <DocumentViewModal
+                isOpen={Boolean(viewDoc)}
+                onClose={() => setViewDoc(null)}
+                url={viewDoc?.url}
+                title={viewDoc?.title || 'Courier Document'}
+                fileName={viewDoc?.fileName || ''}
+            />
         </div>
     );
 }

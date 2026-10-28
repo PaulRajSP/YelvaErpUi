@@ -38,8 +38,8 @@ export const orderApi = {
         apiFetch(`orders/${orderId}/status`, 'PATCH', typeof payload === 'string' ? { status: payload } : payload),
 
     /** GET separate status tracking history */
-    getOrderTracking: (orderNumber, orderEdid = null) =>
-        apiFetch(orderEdid ? `orders/${encodeURIComponent((orderNumber || '').trim())}/tracking?orderEdid=${encodeURIComponent(orderEdid)}` : `orders/${encodeURIComponent((orderNumber || '').trim())}/tracking`),
+    getOrderTracking: (orderEdid) =>
+        apiFetch(`orders/${encodeURIComponent((orderEdid || '').trim())}/tracking`),
 
     /** GET comments for a specific order */
     getOrderComments: (orderEdid) =>

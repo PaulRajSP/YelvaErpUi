@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Edit2, Calendar, Building2, Package, CheckCircle, XCircle, Clock, Paperclip, ExternalLink, AlertTriangle, Loader2, CreditCard, AlertCircle, ChevronRight } from "lucide-react";
+import { ArrowLeft, Calendar, Building2, Package, CheckCircle, XCircle, Clock, Paperclip, ExternalLink, AlertTriangle, Loader2, CreditCard, AlertCircle, ChevronRight, Eye, FileText } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import PageHeader from '../../components/common/PageHeader';
 import AttachmentsList from '../../components/common/AttachmentsList';
+import DocumentViewModal from '../../components/common/DocumentViewModal';
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "../../components/ui/Table";
@@ -11,7 +12,7 @@ import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { Pagination } from "../../components/ui/Pagination";
 import { PAGE_SIZE, formatDate } from "../../common/utils";
-
+import { API_BASE } from "../../services/apiClient";
 import { purchaseApi } from "../../api/purchaseApi";
 
 const STATUS_CONFIG = {
@@ -31,6 +32,7 @@ export default function PurchaseDetails() {
     const [showPayForm, setShowPayForm] = useState(false);
     const [payAmount, setPayAmount] = useState("");
     const [isPaying, setIsPaying] = useState(false);
+    const [viewDoc, setViewDoc] = useState(null);
 
     const [itemsPage, setItemsPage] = useState(1);
     const [itemsTotalCount, setItemsTotalCount] = useState(0);
@@ -133,7 +135,6 @@ export default function PurchaseDetails() {
                 rightContent={
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" onClick={() => navigate("/purchases")} icon={ArrowLeft}>Back</Button>
-                        <Button onClick={() => navigate("/purchases/" + id + "/edit")} icon={Edit2}>Edit Purchase</Button>
                     </div>
                 }
             />
@@ -279,7 +280,7 @@ export default function PurchaseDetails() {
                 )}
 
                 {/* Top info cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
                     <Card className="p-5 space-y-1">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={12} /> Supplier</p>
                         <p className="text-base font-bold text-slate-900">{purchase.supplierName || "Unknown Supplier"}</p>
@@ -287,6 +288,31 @@ export default function PurchaseDetails() {
                     <Card className="p-5 space-y-1">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> Purchase Date</p>
                         <p className="text-base font-bold text-slate-900">{formattedDate}</p>
+                    </Card>
+                    <Card className="p-5 space-y-1">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Paperclip size={12} /> Bill / Invoice</p>
+                        {purchase.attachmentData?.documentEdid ? (
+                            <div className="flex items-center justify-between pt-1">
+                                <span className="text-xs font-semibold text-slate-700 truncate max-w-[120px]" title={purchase.attachmentData.documentOriginalName || 'Purchase Bill'}>
+                                    {purchase.attachmentData.documentOriginalName || 'Purchase Bill'}
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon={Eye}
+                                    className="h-7 text-xs px-2.5"
+                                    onClick={() => setViewDoc({
+                                        url: `${API_BASE}/common/attachment/${purchase.attachmentData.documentEdid}/${encodeURIComponent(purchase.attachmentData.documentOriginalName || 'Purchase_Bill')}`,
+                                        title: purchase.attachmentData.documentOriginalName || 'Purchase Bill',
+                                        fileName: purchase.attachmentData.documentOriginalName || 'Purchase_Bill'
+                                    })}
+                                >
+                                    View
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-400 pt-1">No bill attached</p>
+                        )}
                     </Card>
                     <Card className={"p-5 space-y-1.5 " + statusCfg.bg + " " + statusCfg.border + " border"}>
                         <p className={"text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 " + statusCfg.color}>
@@ -387,8 +413,30 @@ export default function PurchaseDetails() {
                 </Card>
 
                 {/* Attachments */}
-                <AttachmentsList attachments={purchase.attachments} />
+                {(() => {
+                    const attachmentsList = [];
+                    if (purchase.attachmentData?.documentEdid) {
+                        attachmentsList.push({
+                            documentEdid: purchase.attachmentData.documentEdid,
+                            documentOriginalName: purchase.attachmentData.documentOriginalName || 'Purchase Bill',
+                            name: purchase.attachmentData.documentOriginalName || 'Purchase Bill'
+                        });
+                    } else if (Array.isArray(purchase.attachments) && purchase.attachments.length > 0) {
+                        attachmentsList.push(...purchase.attachments);
+                    }
+                    return <AttachmentsList attachments={attachmentsList} />;
+                })()}
             </div>
+
+            {viewDoc && (
+                <DocumentViewModal
+                    isOpen={Boolean(viewDoc)}
+                    onClose={() => setViewDoc(null)}
+                    url={viewDoc.url}
+                    title={viewDoc.title}
+                    fileName={viewDoc.fileName}
+                />
+            )}
         </div>
     );
 }

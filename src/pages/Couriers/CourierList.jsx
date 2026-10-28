@@ -157,7 +157,7 @@ export default function CourierList() {
     };
 
     const handleOpenEdit = (courier) => {
-        setEditingCourier(courier);
+        const attachment = courier.attachmentData || (courier.documentEdid ? { documentEdid: courier.documentEdid, documentOriginalName: courier.documentOriginalName } : null);
         setFormData({
             name: courier.name || '',
             contactPerson: courier.contactPerson || '',
@@ -165,8 +165,8 @@ export default function CourierList() {
             email: courier.email || '',
             address: courier.address || '',
             isActive: courier.isActive !== false,
-            docEdid: courier.docEdid || null,
-            docFileName: courier.docEdid ? 'Attached Document' : '',
+            docEdid: attachment?.documentEdid || null,
+            docFileName: attachment?.documentOriginalName || (attachment?.documentEdid ? 'Attached Document' : ''),
             metadata: (courier.metadata || []).map(m => ({
                 id: m.id || 0,
                 label: m.label || '',
@@ -201,8 +201,17 @@ export default function CourierList() {
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            if (data?.edid) {
-                setFormData(prev => ({ ...prev, docEdid: data.edid, docFileName: file.name }));
+            const docEdid = data?.documentEdid || data?.edid;
+            const docOriginalName = data?.documentOriginalName || data?.documentOrginalName || file.name;
+            if (docEdid) {
+                setFormData(prev => ({
+                    ...prev,
+                    docEdid,
+                    documentEdid: docEdid,
+                    docFileName: docOriginalName,
+                    documentOriginalName: docOriginalName,
+                    documentOrginalName: docOriginalName
+                }));
             }
         } catch (err) {
             console.error('Failed to upload document:', err);
@@ -237,7 +246,10 @@ export default function CourierList() {
             email: formData.email?.trim() || null,
             address: formData.address?.trim() || null,
             isActive: Boolean(formData.isActive),
-            docEdid: formData.docEdid || null,
+            attachmentData: formData.docEdid ? {
+                documentEdid: formData.docEdid,
+                documentOriginalName: formData.docFileName || null
+            } : null,
             metadata: cleanMetadata
         };
 
