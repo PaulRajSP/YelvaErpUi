@@ -172,9 +172,11 @@ export default function Logistics() {
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            if (data?.edid) {
-                setSlipDocumentEdid(data.edid);
-                setSlipFileName(file.name);
+            const docEdid = data?.documentEdid || data?.edid;
+            const docName = data?.documentOriginalName || file.name;
+            if (docEdid) {
+                setSlipDocumentEdid(docEdid);
+                setSlipFileName(docName);
             }
         } catch (err) {
             console.error('Failed to upload slip document:', err);

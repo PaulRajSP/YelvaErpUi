@@ -103,11 +103,45 @@ export default function EditPurchase() {
         }
     };
 
-    const [materialOptions, setMaterialOptions] = useState([]);
+    const [materialOptions, setMaterialOptions] = useState([{ value: "", label: "-- Select Material --" }]);
     const [fetchedMaterials, setFetchedMaterials] = useState([]);
+    const materialsMapRef = useRef(new Map());
+
+    const registerMaterials = (items = []) => {
+        items.forEach(rm => {
+            const id = rm.id || rm.edid;
+            if (id) {
+                materialsMapRef.current.set(id, {
+                    id,
+                    edid: id,
+                    name: rm.name,
+                    category: rm.category,
+                    unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                    unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
+                });
+            }
+        });
+    };
+
     useEffect(() => {
-        setFetchedMaterials(rawMaterials);
-        setMaterialOptions([{ value: "", label: "-- Select Material --" }, ...rawMaterials.map(rm => ({ value: rm.edid || rm.id, label: rm.name + " (" + rm.category + ")", unit: rm.unit }))]);
+        if (rawMaterials && rawMaterials.length > 0) {
+            registerMaterials(rawMaterials);
+            setFetchedMaterials(Array.from(materialsMapRef.current.values()));
+            const initialMap = new Map();
+            initialMap.set("", { value: "", label: "-- Select Material --" });
+            rawMaterials.forEach(rm => {
+                const id = rm.id || rm.edid;
+                if (id) {
+                    initialMap.set(id, {
+                        value: id,
+                        label: rm.name + (rm.category ? " (" + rm.category + ")" : ""),
+                        unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                        unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
+                    });
+                }
+            });
+            setMaterialOptions(Array.from(initialMap.values()));
+        }
     }, [rawMaterials]);
 
     const materialSearchTimeout = useRef(null);
@@ -117,22 +151,41 @@ export default function EditPurchase() {
         const execute = async () => {
             try {
                 const searchTerm = term ? term.trim() : "";
-                const res = await searchRawMaterials(searchTerm, 1, 20);
+                const res = await searchRawMaterials(searchTerm, 1, 30);
                 const items = Array.isArray(res) ? res : (res?.items || res?.data?.items || res?.data || []);
-                setFetchedMaterials(prev => {
-                    const map = new Map(prev.map(m => [m.id || m.edid, m]));
-                    items.forEach(m => map.set(m.id || m.edid, m));
-                    return Array.from(map.values());
-                });
+                registerMaterials(items);
+                setFetchedMaterials(Array.from(materialsMapRef.current.values()));
 
                 const map = new Map();
                 map.set("", { value: "", label: "-- Select Material --" });
                 items.forEach(rm => {
                     const id = rm.id || rm.edid;
                     if (id && !map.has(id)) {
-                        map.set(id, { value: id, label: rm.name + " (" + rm.category + ")", unit: rm.unit });
+                        map.set(id, {
+                            value: id,
+                            label: rm.name + (rm.category ? " (" + rm.category + ")" : ""),
+                            unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                            unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
+                        });
                     }
                 });
+
+                if (formData?.items) {
+                    formData.items.forEach(item => {
+                        if (item.materialId && !map.has(item.materialId)) {
+                            const existing = materialsMapRef.current.get(item.materialId);
+                            if (existing) {
+                                map.set(item.materialId, {
+                                    value: item.materialId,
+                                    label: existing.name + (existing.category ? " (" + existing.category + ")" : ""),
+                                    unit: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg",
+                                    unitSymbol: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg"
+                                });
+                            }
+                        }
+                    });
+                }
+
                 setMaterialOptions(Array.from(map.values()));
             } catch (err) {
                 console.error("Failed to search raw materials:", err);
@@ -144,6 +197,24 @@ export default function EditPurchase() {
         } else {
             materialSearchTimeout.current = setTimeout(execute, 250);
         }
+    };
+
+    const getRowMaterialOptions = (selectedId) => {
+        if (selectedId && !materialOptions.some(o => o.value === selectedId)) {
+            const existing = materialsMapRef.current.get(selectedId);
+            if (existing) {
+                return [
+                    ...materialOptions,
+                    {
+                        value: selectedId,
+                        label: existing.name + (existing.category ? " (" + existing.category + ")" : ""),
+                        unit: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg",
+                        unitSymbol: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg"
+                    }
+                ];
+            }
+        }
+        return materialOptions;
     };
     const [billAttachment, setBillAttachment] = useState(null);
     const [otherAttachments, setOtherAttachments] = useState([]);
@@ -162,7 +233,14 @@ export default function EditPurchase() {
                 amountPaid: purchase.amountPaid || "",
                 items: purchase.items.map(i => ({ ...i, qty: String(i.qty), rate: String(i.rate) }))
             });
-            if (purchase.attachments) {
+            if (purchase.attachmentData?.documentEdid) {
+                setBillAttachment({
+                    documentEdid: purchase.attachmentData.documentEdid,
+                    name: purchase.attachmentData.documentOriginalName || 'Purchase Bill',
+                    remark: '',
+                    isBill: true
+                });
+            } else if (purchase.attachments) {
                 const bill = purchase.attachments.find(a => a.isBill);
                 const others = purchase.attachments.filter(a => !a.isBill);
                 if (bill) setBillAttachment(bill);
@@ -181,7 +259,7 @@ export default function EditPurchase() {
 
     const handleBillUpload = (e) => {
         const file = e.target.files[0];
-        if (file) setBillAttachment({ name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "", isBill: true });
+        if (file) setBillAttachment({ file, name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "", isBill: true });
     };
 
     const handleOtherUploadRow = (index, e) => {
@@ -205,7 +283,7 @@ export default function EditPurchase() {
     };
 
     const handleAddItem = () =>
-        setFormData(prev => ({ ...prev, items: [...prev.items, { materialId: "", qty: "", unit: "kg", rate: "", batchEdid: "" }] }));
+        setFormData(prev => ({ ...prev, items: [...prev.items, { materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }] }));
 
     const updateItem = (index, field, value) => {
         setFormData(prev => {
@@ -533,14 +611,11 @@ export default function EditPurchase() {
                                             onOpen={() => handleMaterialSearch("")}
                                             value={item.materialId}
                                             onChange={v => {
-                                                const selectedMat = materialOptions.find(o => o.value === v) || fetchedMaterials.find(m => (m.id || m.edid) === v);
-                                                if (selectedMat && selectedMat.unit) {
-                                                    updateItemMultiple(index, { materialId: v, unit: selectedMat.unit });
-                                                } else {
-                                                    updateItem(index, "materialId", v);
-                                                }
+                                                const selectedMat = materialsMapRef.current.get(v) || materialOptions.find(o => o.value === v);
+                                                const unitSymbol = selectedMat?.allowedUnitSymbol || selectedMat?.unitSymbol || "";
+                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol });
                                             }}
-                                            options={materialOptions}
+                                            options={getRowMaterialOptions(item.materialId)}
                                             placeholder="-- Select Material --"
                                             onAddNew={() => setAddingMaterialIndex(index)}
                                             addNewLabel="+ Add Material"
@@ -550,7 +625,14 @@ export default function EditPurchase() {
                                         <input type="number" step="0.01" min="0" value={item.qty} onChange={e => updateItem(index, "qty", e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0" />
                                     </div>
                                     <div className="col-span-2">
-                                        <Dropdown disabled={true} searchable={true} value={item.unit} onChange={v => updateItem(index, "unit", v)} options={unitOptions} />
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            disabled
+                                            value={item.unit || ""}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium cursor-not-allowed select-none"
+                                            placeholder="--"
+                                        />
                                     </div>
                                     <div className="col-span-2">
                                         <input type="number" step="0.01" min="0" value={item.rate} onChange={e => updateItem(index, "rate", e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0.00" />

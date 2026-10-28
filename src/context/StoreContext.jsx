@@ -267,9 +267,11 @@ export function StoreProvider({ children }) {
             const data = Array.isArray(res) ? res : (res.items || res.data?.items || res.rawMaterials || res.data || []);
             const mappedData = data.map(m => ({
                 id: m.edid || m.id,
+                edid: m.edid || m.id,
                 name: m.name,
                 category: m.category,
-                unit: m.unitEdid || m.unit,
+                unit: m.allowedUnitSymbol || m.unitSymbol || m.unit || '',
+                unitEdid: m.unitEdid || m.allowedUnitEdid || '',
                 unitSymbol: m.allowedUnitSymbol || m.unitSymbol || '',
                 stock: m.stock,
                 minQuantity: m.minQuantity,
@@ -293,8 +295,9 @@ export function StoreProvider({ children }) {
                 edid: m.edid,
                 name: m.name,
                 category: m.category,
-                unit: m.unitEdid,
-                unitSymbol: m.allowedUnitSymbol,
+                unit: m.allowedUnitSymbol || m.unitSymbol || '',
+                unitEdid: m.unitEdid || m.allowedUnitEdid || '',
+                unitSymbol: m.allowedUnitSymbol || m.unitSymbol || '',
                 stock: m.stock,
                 minQuantity: m.minQuantity,
                 reorderLevel: m.reorderLevel

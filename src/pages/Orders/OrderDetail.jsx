@@ -263,7 +263,7 @@ export default function OrderDetails() {
 
         let isMounted = true;
         setTrackingLoading(true);
-        orderApi.getOrderTracking(effectiveOrderNum || effectiveEdid, effectiveEdid)
+        orderApi.getOrderTracking(effectiveEdid)
             .then(res => {
                 if (isMounted) {
                     const data = res?.data || res;
@@ -940,7 +940,7 @@ export default function OrderDetails() {
                                                                             size="icon"
                                                                             icon={Eye}
                                                                             onClick={() => setViewDoc({
-                                                                                url: `${API_BASE}/common/attachment/${p.docEdid}`,
+                                                                                url: `${API_BASE}/common/attachment/${p.docEdid}/${encodeURIComponent(p.paymentReference ? `Receipt_${p.paymentReference}` : 'Payment_Receipt')}`,
                                                                                 title: `Payment Receipt (${p.paymentMethod || 'Proof'})`,
                                                                                 fileName: p.paymentReference ? `Receipt_${p.paymentReference}` : 'Payment_Receipt'
                                                                             })}
@@ -1107,7 +1107,7 @@ export default function OrderDetails() {
                                                                                 size="icon"
                                                                                 icon={Eye}
                                                                                 onClick={() => setViewDoc({
-                                                                                    url: `${API_BASE}/common/attachment/${p.slipDocument}`,
+                                                                                    url: `${API_BASE}/common/attachment/${p.slipDocument}/${encodeURIComponent(`Courier_Slip_${order.orderNumber || 'package'}`)}`,
                                                                                     title: `Courier Slip · Order #${order.orderNumber || ''}`,
                                                                                     fileName: `Courier_Slip_${order.orderNumber || 'package'}`
                                                                                 })}

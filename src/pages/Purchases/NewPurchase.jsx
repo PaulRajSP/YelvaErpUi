@@ -8,10 +8,11 @@ import DatePicker from "../../components/common/DatePicker";
 import BatchSelector from "../../components/common/BatchSelector";
 import { useStore } from "../../context/StoreContext";
 import { purchaseApi } from "../../api/purchaseApi";
+import { commonApi } from "../../api/commonApi";
 
 export default function NewPurchase() {
     const navigate = useNavigate();
-    const { searchSuppliers, rawMaterials, setRawMaterials, searchRawMaterials } = useStore();
+    const { searchSuppliers, rawMaterials, loadRawMaterials, setRawMaterials, searchRawMaterials } = useStore();
 
     const [categories, setCategories] = useState([]);
     const categorySearchTimeout = useRef(null);
@@ -38,7 +39,12 @@ export default function NewPurchase() {
         try {
             const data = await purchaseApi.getUnits();
             if (data && data.items) {
-                setUnitOptions(data.items.map(u => ({ value: u.edid, label: `${u.name} (${u.symbol})` })));
+                setUnitOptions(data.items.map(u => ({
+                    value: u.symbol || u.edid,
+                    label: u.symbol ? `${u.name} (${u.symbol})` : u.name,
+                    symbol: u.symbol,
+                    edid: u.edid
+                })));
             }
         } catch (err) {
             console.error("Failed to load units", err);
@@ -76,7 +82,7 @@ export default function NewPurchase() {
                     }
                 });
 
-                if (formData.supplierId && !map.has(formData.supplierId)) {
+                if (formData?.supplierId && !map.has(formData.supplierId)) {
                     const cur = fetchedSuppliers.find(s => (s.edid || s.id) === formData.supplierId);
                     if (cur) {
                         const curNormName = (cur.name || "").trim().toLowerCase();
@@ -105,7 +111,50 @@ export default function NewPurchase() {
 
     const [materialOptions, setMaterialOptions] = useState([{ value: "", label: "-- Select Material --" }]);
     const [fetchedMaterials, setFetchedMaterials] = useState([]);
+    const materialsMapRef = useRef(new Map());
     const materialSearchTimeout = useRef(null);
+
+    const registerMaterials = (items = []) => {
+        items.forEach(rm => {
+            const id = rm.id || rm.edid;
+            if (id) {
+                materialsMapRef.current.set(id, {
+                    id,
+                    edid: id,
+                    name: rm.name,
+                    category: rm.category,
+                    unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                    unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
+                });
+            }
+        });
+    };
+
+    useEffect(() => {
+        loadRawMaterials();
+        fetchUnits();
+    }, [loadRawMaterials]);
+
+    useEffect(() => {
+        if (rawMaterials && rawMaterials.length > 0) {
+            registerMaterials(rawMaterials);
+            setFetchedMaterials(Array.from(materialsMapRef.current.values()));
+            const initialMap = new Map();
+            initialMap.set("", { value: "", label: "-- Select Material --" });
+            rawMaterials.forEach(rm => {
+                const id = rm.id || rm.edid;
+                if (id) {
+                    initialMap.set(id, {
+                        value: id,
+                        label: rm.name + (rm.category ? " (" + rm.category + ")" : ""),
+                        unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                        unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
+                    });
+                }
+            });
+            setMaterialOptions(Array.from(initialMap.values()));
+        }
+    }, [rawMaterials]);
 
     const handleMaterialSearch = (term = "") => {
         if (materialSearchTimeout.current) clearTimeout(materialSearchTimeout.current);
@@ -113,46 +162,36 @@ export default function NewPurchase() {
         const executeSearch = async () => {
             try {
                 const searchTerm = term ? term.trim() : "";
-                const res = await searchRawMaterials(searchTerm, 1, 20);
+                const res = await searchRawMaterials(searchTerm, 1, 30);
                 const items = Array.isArray(res) ? res : (res?.items || res?.data?.items || res?.data || []);
-
-                setFetchedMaterials(prev => {
-                    const map = new Map(prev.map(m => [m.id || m.edid, m]));
-                    items.forEach(m => map.set(m.id || m.edid, m));
-                    return Array.from(map.values());
-                });
+                registerMaterials(items);
+                setFetchedMaterials(Array.from(materialsMapRef.current.values()));
 
                 const map = new Map();
                 map.set("", { value: "", label: "-- Select Material --" });
-                const seenMaterialLabels = new Set();
 
                 items.forEach(rm => {
                     const id = rm.id || rm.edid;
                     if (id) {
-                        const label = rm.name + (rm.category ? " (" + rm.category + ")" : "");
                         map.set(id, {
                             value: id,
-                            label,
-                            unit: rm.unit,
-                            unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || ""
+                            label: rm.name + (rm.category ? " (" + rm.category + ")" : ""),
+                            unit: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg",
+                            unitSymbol: rm.unitSymbol || rm.allowedUnitSymbol || rm.unit || "kg"
                         });
-                        seenMaterialLabels.add(label.trim().toLowerCase());
                     }
                 });
 
                 formData.items.forEach(item => {
                     if (item.materialId && !map.has(item.materialId)) {
-                        const existing = fetchedMaterials.find(m => (m.id || m.edid) === item.materialId);
+                        const existing = materialsMapRef.current.get(item.materialId);
                         if (existing) {
-                            const label = existing.name + (existing.category ? " (" + existing.category + ")" : "");
-                            if (!seenMaterialLabels.has(label.trim().toLowerCase())) {
-                                map.set(item.materialId, {
-                                    value: item.materialId,
-                                    label,
-                                    unit: existing.unit,
-                                    unitSymbol: existing.unitSymbol || existing.allowedUnitSymbol || ""
-                                });
-                            }
+                            map.set(item.materialId, {
+                                value: item.materialId,
+                                label: existing.name + (existing.category ? " (" + existing.category + ")" : ""),
+                                unit: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg",
+                                unitSymbol: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg"
+                            });
                         }
                     }
                 });
@@ -170,12 +209,30 @@ export default function NewPurchase() {
         }
     };
 
+    const getRowMaterialOptions = (selectedId) => {
+        if (selectedId && !materialOptions.some(o => o.value === selectedId)) {
+            const existing = materialsMapRef.current.get(selectedId);
+            if (existing) {
+                return [
+                    ...materialOptions,
+                    {
+                        value: selectedId,
+                        label: existing.name + (existing.category ? " (" + existing.category + ")" : ""),
+                        unit: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg",
+                        unitSymbol: existing.unitSymbol || existing.allowedUnitSymbol || existing.unit || "kg"
+                    }
+                ];
+            }
+        }
+        return materialOptions;
+    };
+
     const [formData, setFormData] = useState({
         supplierId: "",
         date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split("T")[0],
         status: "PAID",
         amountPaid: "",
-        items: [{ materialId: "", qty: "", unit: "kg", rate: "", batchEdid: "" }]
+        items: [{ materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }]
     });
     const [billAttachment, setBillAttachment] = useState(null);
 
@@ -194,12 +251,12 @@ export default function NewPurchase() {
 
     const handleBillUpload = (e) => {
         const file = e.target.files[0];
-        if (file) setBillAttachment({ name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "", isBill: true });
+        if (file) setBillAttachment({ file, name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "", isBill: true });
     };
 
 
     const handleAddItem = () =>
-        setFormData(prev => ({ ...prev, items: [...prev.items, { materialId: "", qty: "", unit: "kg", rate: "", batchEdid: "" }] }));
+        setFormData(prev => ({ ...prev, items: [...prev.items, { materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }] }));
 
     const updateItem = (index, field, value) => {
         setFormData(prev => {
@@ -266,18 +323,20 @@ export default function NewPurchase() {
             const apiRes = await purchaseApi.addRawMaterial(reqPayload);
             const newId = apiRes && apiRes.edid ? apiRes.edid : ("rm" + Date.now());
             const catObj = categories.find(c => c.name === categoryNameToSave || c.edid === categoryEdidToSave);
-            const unitSymbol = catObj?.allowedUnitSymbol || unitOptions.find(u => u.value === reqPayload.unitEdid)?.label || "";
+            const foundUnit = unitOptions.find(u => u.edid === reqPayload.unitEdid || u.value === reqPayload.unitEdid);
+            const unitSymbol = catObj?.allowedUnitSymbol || foundUnit?.symbol || foundUnit?.value || "kg";
             const newMaterial = {
                 id: newId,
                 edid: newId,
                 name: reqPayload.name,
                 category: categoryNameToSave,
-                unit: reqPayload.unitEdid,
+                unit: unitSymbol,
                 unitSymbol: unitSymbol,
                 stock: reqPayload.stock,
                 minQuantity: reqPayload.minQuantity,
                 reorderLevel: reqPayload.reorderLevel
             };
+            materialsMapRef.current.set(newId, newMaterial);
             setRawMaterials(prev => [...(prev || []), newMaterial]);
             setFetchedMaterials(prev => [...prev, newMaterial]);
             setMaterialOptions(prev => [
@@ -285,11 +344,11 @@ export default function NewPurchase() {
                 {
                     value: newId,
                     label: reqPayload.name + (categoryNameToSave ? " (" + categoryNameToSave + ")" : ""),
-                    unit: reqPayload.unitEdid,
+                    unit: unitSymbol,
                     unitSymbol: unitSymbol
                 }
             ]);
-            updateItemMultiple(addingMaterialIndex, { materialId: newId, unit: reqPayload.unitEdid });
+            updateItemMultiple(addingMaterialIndex, { materialId: newId, unit: unitSymbol });
         } catch (err) {
             console.error("Failed to add raw material via API", err);
             alert("Error adding raw material: " + err.message);
@@ -315,12 +374,33 @@ export default function NewPurchase() {
         const total = calculateTotal();
         const amountPaid = parseFloat(formData.amountPaid) || 0;
 
+        let attachmentData = null;
+        if (billAttachment?.file) {
+            try {
+                const uploadRes = await commonApi.uploadAttachment(billAttachment.file);
+                const data = uploadRes?.data || uploadRes;
+                const docEdid = data?.documentEdid || data?.edid;
+                const docOriginalName = data?.documentOriginalName || billAttachment.name;
+                if (docEdid) {
+                    attachmentData = {
+                        documentEdid: docEdid,
+                        documentOriginalName: docOriginalName
+                    };
+                }
+            } catch (err) {
+                console.error("Failed to upload bill attachment", err);
+                alert("Failed to upload bill attachment: " + (err.message || "Unknown error"));
+                return;
+            }
+        }
+
         const reqPayload = {
             purchase: {
                 supplierEdid: formData.supplierId,
                 date: new Date(formData.date).toISOString(),
                 totalAmount: total,
-                paidAmount: amountPaid
+                paidAmount: amountPaid,
+                attachmentData: attachmentData
             },
             items: validItems.map(item => ({
                 materialEdid: item.materialId,
@@ -547,14 +627,11 @@ export default function NewPurchase() {
                                             onOpen={() => handleMaterialSearch("")}
                                             value={item.materialId}
                                             onChange={v => {
-                                                const selectedMat = materialOptions.find(o => o.value === v) || fetchedMaterials.find(m => (m.id || m.edid) === v);
-                                                if (selectedMat && selectedMat.unit) {
-                                                    updateItemMultiple(index, { materialId: v, unit: selectedMat.unit });
-                                                } else {
-                                                    updateItem(index, "materialId", v);
-                                                }
+                                                const selectedMat = materialsMapRef.current.get(v) || materialOptions.find(o => o.value === v);
+                                                const unitSymbol = selectedMat?.allowedUnitSymbol || selectedMat?.unitSymbol || "";
+                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol });
                                             }}
-                                            options={materialOptions}
+                                            options={getRowMaterialOptions(item.materialId)}
                                             placeholder="-- Select Material --"
                                             onAddNew={() => setAddingMaterialIndex(index)}
                                             addNewLabel="+ Add Material"
@@ -564,17 +641,13 @@ export default function NewPurchase() {
                                         <input type="number" step="0.01" min="0" value={item.qty} onChange={e => updateItem(index, "qty", e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0" />
                                     </div>
                                     <div className="col-span-2">
-                                        <Dropdown
-                                            disabled={true}
-                                            searchable={true}
-                                            value={item.unit}
-                                            onChange={v => updateItem(index, "unit", v)}
-                                            options={[
-                                                ...unitOptions,
-                                                ...(item.unit && !unitOptions.find(u => u.value === item.unit)
-                                                    ? [{ value: item.unit, label: materialOptions.find(m => m.value === item.materialId)?.unitSymbol || item.unit }]
-                                                    : [])
-                                            ]}
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            disabled
+                                            value={item.unit || ""}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium cursor-not-allowed select-none"
+                                            placeholder="--"
                                         />
                                     </div>
                                     <div className="col-span-2">

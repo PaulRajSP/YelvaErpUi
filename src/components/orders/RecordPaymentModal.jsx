@@ -87,9 +87,11 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            if (data?.edid) {
-                setDocEdid(data.edid);
-                setDocFileName(file.name);
+            const docEdid = data?.documentEdid || data?.edid;
+            const docName = data?.documentOriginalName || file.name;
+            if (docEdid) {
+                setDocEdid(docEdid);
+                setDocFileName(docName);
             }
         } catch (err) {
             console.error('Failed to upload payment document:', err);

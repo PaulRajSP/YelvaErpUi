@@ -17,7 +17,6 @@ import ProductDetail from '../pages/Products/ProductDetail';
 import PurchaseList from '../pages/Purchases/PurchaseList';
 import PurchaseDetail from '../pages/Purchases/PurchaseDetail';
 import NewPurchase from '../pages/Purchases/NewPurchase';
-import EditPurchase from '../pages/Purchases/EditPurchase';
 import SupplierDetail from '../pages/Purchases/SupplierDetail';
 import Accounts from '../pages/Accounts/Accounts';
 import MaterialList from '../pages/Materials/MaterialList';
@@ -100,7 +99,6 @@ export default function AppRoutes() {
                 <Route path="purchases/new" element={<ProtectedRoute allowedRoles={['Admin']}><NewPurchase /></ProtectedRoute>} />
                 <Route path="purchases/suppliers/:id" element={<ProtectedRoute allowedRoles={['Admin']}><SupplierDetail /></ProtectedRoute>} />
                 <Route path="purchases/:id" element={<ProtectedRoute allowedRoles={['Admin']}><PurchaseDetail /></ProtectedRoute>} />
-                <Route path="purchases/:id/edit" element={<ProtectedRoute allowedRoles={['Admin']}><EditPurchase /></ProtectedRoute>} />
 
                 {/* Products */}
                 <Route path="products" element={<ProductList />} />
