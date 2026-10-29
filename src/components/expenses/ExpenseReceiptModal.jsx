@@ -21,10 +21,10 @@ export default function ExpenseReceiptModal({
     const [zoom, setZoom] = useState(1);
     const [rotation, setRotation] = useState(0);
 
-    const doc = expense?.attachmentData || expense;
-    const docEdid = doc?.documentEdid || expense?.documentEdid || expense?.docEdid;
-    const fallbackFileName = doc?.documentOriginalName || expense?.documentOriginalName || expense?.documentOrginalName || expense?.docFileName || `Receipt-${expense?.expenseNumber || 'file'}`;
-    const docUrl = docEdid ? `${API_BASE}/common/attachment/${encodeURIComponent(docEdid)}/${encodeURIComponent(fallbackFileName)}` : '';
+    const doc = Array.isArray(expense?.attachmentData) ? expense.attachmentData[0] : (expense?.attachmentData || expense);
+    const attachmentEdid = doc?.attachmentEdid || doc?.documentEdid || doc?.edid || expense?.documentEdid;
+    const fallbackFileName = doc?.attachmentOriginalName || doc?.documentOriginalName || expense?.documentOriginalName || `Receipt-${expense?.expenseNumber || 'file'}`;
+    const docUrl = attachmentEdid ? `${API_BASE}/common/attachment/${encodeURIComponent(attachmentEdid)}/${encodeURIComponent(fallbackFileName)}` : '';
 
     useEffect(() => {
         if (!isOpen || !docUrl) {

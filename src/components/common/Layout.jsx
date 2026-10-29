@@ -49,7 +49,7 @@ export default function Layout() {
                 <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-200">
                     <img src="/logo.png" alt="Logo" className="w-9 h-9 object-contain" />
                     <div>
-                        <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">PureHoney</h1>
+                        <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">Yelva Honey</h1>
                         <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-0.5">Billing System</p>
                     </div>
                 </div>

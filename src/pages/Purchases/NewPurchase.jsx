@@ -232,9 +232,13 @@ export default function NewPurchase() {
         date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split("T")[0],
         status: "PAID",
         amountPaid: "",
+        initialPaymentMethod: "Cash",
+        initialPaymentReference: "",
+        initialPaymentRemark: "",
         items: [{ materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }]
     });
-    const [billAttachment, setBillAttachment] = useState(null);
+    const [billAttachments, setBillAttachments] = useState([]);
+    const [initialPaymentAttachments, setInitialPaymentAttachments] = useState([]);
 
     const [addingMaterialIndex, setAddingMaterialIndex] = useState(null);
     const [newMaterialForm, setNewMaterialForm] = useState({ name: "", category: "", unitEdid: "", minQuantity: 0, reorderLevel: 0 });
@@ -250,8 +254,25 @@ export default function NewPurchase() {
 
 
     const handleBillUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) setBillAttachment({ file, name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "", isBill: true });
+        const files = Array.from(e.target.files || []);
+        if (files.length) {
+            setBillAttachments(prev => [
+                ...prev,
+                ...files.map(file => ({ file, name: file.name, size: file.size, url: URL.createObjectURL(file), remark: "" }))
+            ]);
+        }
+        e.target.value = "";
+    };
+
+    const handleInitialPaymentUpload = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length) {
+            setInitialPaymentAttachments(prev => [
+                ...prev,
+                ...files.map(file => ({ file, name: file.name, size: file.size }))
+            ]);
+        }
+        e.target.value = "";
     };
 
 
@@ -374,22 +395,45 @@ export default function NewPurchase() {
         const total = calculateTotal();
         const amountPaid = parseFloat(formData.amountPaid) || 0;
 
-        let attachmentData = null;
-        if (billAttachment?.file) {
+        if (amountPaid > 0 && formData.initialPaymentMethod !== 'Cash') {
+            if (!formData.initialPaymentReference.trim()) return alert('Payment reference is required for this payment method.');
+            if (initialPaymentAttachments.length === 0) return alert('Attach payment proof for this payment method.');
+        }
+
+        let attachmentData = [];
+        let initialPaymentAttachmentData = [];
+        if (billAttachments.length > 0) {
             try {
-                const uploadRes = await commonApi.uploadAttachment(billAttachment.file);
-                const data = uploadRes?.data || uploadRes;
-                const docEdid = data?.documentEdid || data?.edid;
-                const docOriginalName = data?.documentOriginalName || billAttachment.name;
-                if (docEdid) {
-                    attachmentData = {
-                        documentEdid: docEdid,
-                        documentOriginalName: docOriginalName
+                attachmentData = (await Promise.all(billAttachments.map(async attachment => {
+                    const uploadRes = await commonApi.uploadAttachment(attachment.file);
+                    const data = uploadRes?.data || uploadRes;
+                    const attachmentEdid = data?.attachmentEdid || data?.documentEdid || data?.edid;
+                    if (!attachmentEdid) return null;
+                    return {
+                        attachmentEdid,
+                        attachmentType: 'Bill',
+                        remarks: attachment.remark || ''
                     };
-                }
+                }))).filter(Boolean);
             } catch (err) {
                 console.error("Failed to upload bill attachment", err);
                 alert("Failed to upload bill attachment: " + (err.message || "Unknown error"));
+                return;
+            }
+        }
+
+        if (amountPaid > 0 && initialPaymentAttachments.length > 0) {
+            try {
+                initialPaymentAttachmentData = (await Promise.all(initialPaymentAttachments.map(async attachment => {
+                    const uploadRes = await commonApi.uploadAttachment(attachment.file);
+                    const data = uploadRes?.data || uploadRes;
+                    const attachmentEdid = data?.attachmentEdid || data?.documentEdid || data?.edid;
+                    if (!attachmentEdid) return null;
+                    return { attachmentEdid, attachmentType: 'Receipt', remarks: '' };
+                }))).filter(Boolean);
+            } catch (err) {
+                console.error('Failed to upload initial payment proof', err);
+                alert('Failed to upload payment proof: ' + (err.message || 'Unknown error'));
                 return;
             }
         }
@@ -400,6 +444,10 @@ export default function NewPurchase() {
                 date: new Date(formData.date).toISOString(),
                 totalAmount: total,
                 paidAmount: amountPaid,
+                initialPaymentMethod: formData.initialPaymentMethod,
+                initialPaymentReference: formData.initialPaymentReference.trim() || null,
+                initialPaymentRemark: formData.initialPaymentRemark.trim() || null,
+                initialPaymentAttachmentData,
                 attachmentData: attachmentData
             },
             items: validItems.map(item => ({
@@ -502,6 +550,42 @@ export default function NewPurchase() {
                                             placeholder="0.00"
                                         />
                                     </div>
+                                    {parseFloat(formData.amountPaid) > 0 && (
+                                        <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                                            <Dropdown
+                                                label="Payment Method"
+                                                value={formData.initialPaymentMethod}
+                                                options={['Cash', 'UPI', 'BankTransfer', 'Card', 'Cheque']}
+                                                onChange={value => setFormData(p => ({ ...p, initialPaymentMethod: value }))}
+                                                className="w-full"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={formData.initialPaymentReference}
+                                                onChange={e => setFormData(p => ({ ...p, initialPaymentReference: e.target.value }))}
+                                                placeholder="Transaction / cheque reference (optional)"
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={formData.initialPaymentRemark}
+                                                onChange={e => setFormData(p => ({ ...p, initialPaymentRemark: e.target.value }))}
+                                                placeholder="Payment remark (optional)"
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+                                            />
+                                            {initialPaymentAttachments.map((attachment, index) => (
+                                                <div key={`${attachment.name}-${index}`} className="flex items-center justify-between gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                                    <span className="text-xs font-semibold text-slate-700 truncate">{attachment.name}</span>
+                                                    <button type="button" onClick={() => setInitialPaymentAttachments(prev => prev.filter((_, i) => i !== index))} className="p-1 text-slate-400 hover:text-rose-600" title="Remove payment proof"><Trash2 size={14} /></button>
+                                                </div>
+                                            ))}
+                                            <label className="flex items-center justify-center gap-2 p-2.5 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="file" multiple accept="image/*,.pdf" onChange={handleInitialPaymentUpload} className="hidden" />
+                                                <UploadCloud size={14} className="text-slate-500" />
+                                                <span className="text-xs font-semibold text-slate-600">Attach payment proof</span>
+                                            </label>
+                                        </div>
+                                    )}
                                     <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${isOwed ? "bg-red-50 border-red-100" :
                                         isOverpaid ? "bg-amber-50 border-amber-100" :
                                             "bg-emerald-50 border-emerald-100"
@@ -528,34 +612,32 @@ export default function NewPurchase() {
                             <h4 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 mb-1">
                                 <FileText size={16} /> Bill (Optional)
                             </h4>
-                            <p className="text-[11px] text-slate-500">Upload one bill document for every purchase.</p>
+                            <p className="text-[11px] text-slate-500">Upload bills and supporting documents.</p>
                         </div>
-                        {!billAttachment ? (
+                        <div className="space-y-2">
+                            {billAttachments.map((attachment, index) => (
+                                <div key={`${attachment.name}-${index}`} className="space-y-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <FileText size={15} className="text-slate-500 shrink-0" />
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-slate-700 truncate">{attachment.name}</p>
+                                                <p className="text-[10px] text-slate-400">{(attachment.size / 1024).toFixed(0)}KB</p>
+                                            </div>
+                                        </div>
+                                        <button type="button" onClick={() => setBillAttachments(prev => prev.filter((_, i) => i !== index))} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Remove attachment"><Trash2 size={14} /></button>
+                                    </div>
+                                    <input type="text" placeholder="Remark (optional)" value={attachment.remark} onChange={e => setBillAttachments(prev => prev.map((item, i) => i === index ? { ...item, remark: e.target.value } : item))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
+                                </div>
+                            ))}
                             <label className="flex flex-col items-center justify-center gap-2 w-full border-2 border-dashed border-slate-200 rounded-xl py-6 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors group">
                                 <UploadCloud size={20} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
                                 <div className="text-center">
-                                    <span className="text-xs font-bold text-slate-700 block group-hover:text-blue-700 transition-colors">Click to attach bill</span>
-                                    <span className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 10MB)</span>
+                                    <span className="text-xs font-bold text-slate-700 block group-hover:text-blue-700 transition-colors">Add purchase documents</span>
+                                    <span className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 10MB each)</span>
                                 </div>
-                                <input type="file" className="hidden" onChange={handleBillUpload} accept="image/*,.pdf" />
+                                <input type="file" multiple className="hidden" onChange={handleBillUpload} accept="image/*,.pdf" />
                             </label>
-                        ) : (
-                            <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shrink-0">
-                                        <FileText size={14} className="text-slate-500" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-slate-700 truncate">{billAttachment.name}</p>
-                                        <p className="text-[10px] text-slate-400">{billAttachment.size ? (billAttachment.size / 1024).toFixed(0) + 'KB' : 'Attached'}</p>
-                                    </div>
-                                </div>
-                                <button type="button" onClick={() => setBillAttachment(null)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"><Trash2 size={14} /></button>
-                            </div>
-                        )}
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-600">Remark</label>
-                            <input type="text" placeholder="e.g. Purchase bill / Tax invoice" value={billAttachment?.remark || ""} onChange={e => { if (billAttachment) setBillAttachment({ ...billAttachment, remark: e.target.value }) }} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" disabled={!billAttachment} />
                         </div>
                     </div>
                 </div>

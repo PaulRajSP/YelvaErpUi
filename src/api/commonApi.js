@@ -3,6 +3,9 @@ import { apiFetch } from '../services/apiClient';
 // In-memory cache for common enum types
 const typesCache = new Map();
 
+// Azure backend endpoint for file upload
+export const AZURE_UPLOAD_URL = 'https://honeyerpapi-ecfag7bahrdhdxf6.southindia-01.azurewebsites.net/api/common/upload';
+
 export const commonApi = {
     /**
      * GET enum types from backend (e.g. 'SupplierType', 'StockStatus', 'PaymentStatus', 'CustomerType')
@@ -29,11 +32,45 @@ export const commonApi = {
             typesCache.clear();
         }
     },
-    
-    /** POST upload attachment file to server */
+
+    /**
+     * POST upload attachment file to Azure server
+     * Calls Azure API for uploading only
+     */
     uploadAttachment: async (file) => {
+        if (!file) return null;
+
         const formData = new FormData();
         formData.append('file', file);
-        return apiFetch('common/upload', 'POST', formData);
+        return apiFetch(AZURE_UPLOAD_URL, 'POST', formData);
+    },
+
+    /**
+     * GET module attachments
+     * Endpoint: GET /api/common/module-attachment?ModuleName={ModuleName}&RecordEdid={RecordEdid}
+     * Query Parameters:
+     * - ModuleName (string)
+     * - RecordEdid (string)
+     * Returns: { items: [{ attachmentEdid, attachmentOriginalName, attachmentType }] }
+     */
+    getModuleAttachment: async (moduleNameOrReq, recordEdid) => {
+        let moduleName = moduleNameOrReq;
+        let edid = recordEdid;
+        if (typeof moduleNameOrReq === 'object' && moduleNameOrReq !== null) {
+            moduleName = moduleNameOrReq.moduleName || moduleNameOrReq.ModuleName;
+            edid = moduleNameOrReq.recordEdid || moduleNameOrReq.RecordEdid;
+        }
+        const params = new URLSearchParams();
+        if (moduleName) params.append('ModuleName', moduleName);
+        if (edid) params.append('RecordEdid', edid);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        return apiFetch(`common/module-attachment${qs}`);
+    },
+
+    /**
+     * Alias for getModuleAttachment
+     */
+    getModuleAttachments: async (moduleNameOrReq, recordEdid) => {
+        return commonApi.getModuleAttachment(moduleNameOrReq, recordEdid);
     }
 };

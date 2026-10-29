@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, Phone, Mail, FileText, Upload, Trash2,
-    RefreshCw, Loader2, X, Eye, ArrowUpRight, Printer, AlertCircle,
+    RefreshCw, Loader2, X, Eye, Printer, AlertCircle,
     Edit2, Truck
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
@@ -14,6 +14,8 @@ import { Card } from '../../components/ui/Card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../../components/ui/Table';
 import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
+import DocumentViewModal from '../../components/common/DocumentViewModal';
+import { API_BASE } from '../../services/apiClient';
 import { courierApi } from '../../api/courierApi';
 import { commonApi } from '../../api/commonApi';
 import { PAGE_SIZE } from '../../common/utils';
@@ -23,8 +25,29 @@ const STATUS_OPTIONS = [
     { value: 'INACTIVE', label: 'Inactive' },
 ];
 
+const FALLBACK_ATTACHMENT_TYPES = [
+    { value: 'Agreement', label: 'Agreement' },
+    { value: 'Receipt', label: 'Receipt' },
+    { value: 'Other', label: 'Other' }
+];
+
+const normalizeCourierAttachments = (attachments) => {
+    const items = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : []);
+    return items.map(item => {
+        const attachmentOriginalName = item.attachmentOriginalName || item.documentOriginalName || '';
+        return {
+            attachmentEdid: item.attachmentEdid || item.documentEdid || '',
+            attachmentOriginalName,
+            attachmentType: item.attachmentType || 'Other',
+            remarks: item.remarks || item.remark || ''
+        };
+    }).filter(item => item.attachmentEdid);
+};
+
 export default function CourierList() {
     const navigate = useNavigate();
+    const [attachmentTypes, setAttachmentTypes] = useState(FALLBACK_ATTACHMENT_TYPES);
+    const [viewDoc, setViewDoc] = useState(null);
 
     // ── Data state ───────────────────────────────────────────────────────────
     const [couriers, setCouriers] = useState([]);
@@ -54,9 +77,26 @@ export default function CourierList() {
 
     // ── Form state ───────────────────────────────────────────────────────────
     const [formData, setFormData] = useState({
-        name: '', contactPerson: '', mobile: '', email: '', address: '',
-        isActive: true, docEdid: null, docFileName: '', metadata: []
+        name: '',
+        contactPerson: '',
+        mobile: '',
+        email: '',
+        address: '',
+        isActive: true,
+        attachments: [],
+        metadata: []
     });
+
+    useEffect(() => {
+        commonApi.getTypes('CourierAttachmentType')
+            .then(res => {
+                const items = res?.items || res?.data?.items || [];
+                if (items.length) {
+                    setAttachmentTypes(items.map(it => typeof it === 'string' ? { value: it, label: it } : it));
+                }
+            })
+            .catch(err => console.warn('Could not load courier document types:', err));
+    }, []);
 
     // ── Debounce search input ────────────────────────────────────────────────
     const isInitialSearchMount = useRef(true);
@@ -79,7 +119,7 @@ export default function CourierList() {
         setCurrentPage(1);
     }, [debouncedSearch, statusFilter]);
 
-    // ── Server-side fetch ────────────────────────────────────────────────────
+    // ── Server-side fetch: POST /api/couriers/list ───────────────────────────
     const fetchCouriers = useCallback(async ({ onlyActive, searchText, pageNumber }) => {
         const reqId = ++activeRequestId.current;
         setLoading(true);
@@ -87,13 +127,13 @@ export default function CourierList() {
         try {
             const res = await courierApi.getCouriers({
                 onlyActive,
-                searchText: searchText || null,
+                searchText: searchText || '',
                 pageNumber,
                 pageSize: PAGE_SIZE,
             });
-            if (reqId !== activeRequestId.current) return;   // stale — discard
-            const items = res?.data?.items || res?.items || (Array.isArray(res) ? res : []);
-            const count = res?.data?.totalCount ?? res?.totalCount ?? items.length;
+            if (reqId !== activeRequestId.current) return;
+            const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
+            const count = res?.totalCount ?? res?.data?.totalCount ?? items.length;
             setCouriers(Array.isArray(items) ? items : []);
             setTotalCount(count);
         } catch (err) {
@@ -129,9 +169,11 @@ export default function CourierList() {
         try {
             const res = await courierApi.getCouriers({
                 onlyActive: false,
-                searchText: null,
+                searchText: '',
+                pageNumber: 1,
+                pageSize: 500,
             });
-            const items = res?.data?.items || res?.items || (Array.isArray(res) ? res : []);
+            const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
             setPrintRows(Array.isArray(items) ? items : []);
             setTimeout(() => {
                 window.print();
@@ -145,30 +187,78 @@ export default function CourierList() {
         }
     };
 
-    // ── Modal handlers ───────────────────────────────────────────────────────
+    // ── Navigate to detail: /couriers/:edid/:courierName ─────────────────────
+    const handleViewCourier = (c) => {
+        const edid = c?.edid || c?.id;
+        if (!edid) return;
+        navigate(`/couriers/${encodeURIComponent(edid)}/${encodeURIComponent(c.name || '')}`, {
+            state: { courier: c }
+        });
+    };
+
+    // ── Open Add Modal ───────────────────────────────────────────────────────
     const handleOpenAdd = () => {
         setEditingCourier(null);
         setFormData({
-            name: '', contactPerson: '', mobile: '', email: '', address: '',
-            isActive: true, docEdid: null, docFileName: '', metadata: []
+            name: '',
+            contactPerson: '',
+            mobile: '',
+            email: '',
+            address: '',
+            isActive: true,
+            attachments: [],
+            metadata: []
         });
         setModalError(null);
         setIsModalOpen(true);
     };
 
-    const handleOpenEdit = (courier) => {
-        const attachment = courier.attachmentData || (courier.documentEdid ? { documentEdid: courier.documentEdid, documentOriginalName: courier.documentOriginalName } : null);
+    // ── Open Edit Modal (fetches full details by Edid & Name) ────────────────
+    const handleOpenEdit = async (courier) => {
+        let fullCourier = courier;
+        const edid = courier?.edid || courier?.id;
+        let fetchedAttachments = [];
+        if (edid) {
+            try {
+                const [courierRes, attRes] = await Promise.allSettled([
+                    courier?.name ? courierApi.getCourier(edid, courier.name) : Promise.resolve(null),
+                    commonApi.getModuleAttachment('Courier', edid)
+                ]);
+
+                if (courierRes.status === 'fulfilled' && courierRes.value) {
+                    const data = courierRes.value?.data || courierRes.value;
+                    if (data && (data.edid || data.name)) {
+                        fullCourier = { ...courier, ...data };
+                    }
+                }
+
+                if (attRes.status === 'fulfilled' && attRes.value) {
+                    const attItems = attRes.value?.items || attRes.value?.data?.items || (Array.isArray(attRes.value) ? attRes.value : []);
+                    if (attItems.length > 0) {
+                        fetchedAttachments = attItems;
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not load full courier details for edit:', err);
+            }
+        }
+
+        setEditingCourier(fullCourier);
+
+        const attachments = normalizeCourierAttachments(
+            fetchedAttachments.length ? fetchedAttachments : (fullCourier.attachmentData || fullCourier.attachments)
+        );
+
         setFormData({
-            name: courier.name || '',
-            contactPerson: courier.contactPerson || '',
-            mobile: courier.mobile || '',
-            email: courier.email || '',
-            address: courier.address || '',
-            isActive: courier.isActive !== false,
-            docEdid: attachment?.documentEdid || null,
-            docFileName: attachment?.documentOriginalName || (attachment?.documentEdid ? 'Attached Document' : ''),
-            metadata: (courier.metadata || []).map(m => ({
-                id: m.id || 0,
+            name: fullCourier.name || '',
+            contactPerson: fullCourier.contactPerson || '',
+            mobile: fullCourier.mobile || '',
+            email: fullCourier.email || '',
+            address: fullCourier.address || '',
+            isActive: fullCourier.isActive !== false,
+            attachments,
+            metadata: (fullCourier.metadata || []).map(m => ({
+                courierMasterId: Number(m.courierMasterId) || 0,
                 label: m.label || '',
                 value: m.value || '',
                 showInSlip: m.showInSlip !== false
@@ -180,7 +270,7 @@ export default function CourierList() {
 
     const handleAddMetaRow = () => setFormData(prev => ({
         ...prev,
-        metadata: [...prev.metadata, { id: 0, label: '', value: '', showInSlip: true }]
+        metadata: [...prev.metadata, { courierMasterId: 0, label: '', value: '', showInSlip: true }]
     }));
 
     const handleUpdateMetaRow = (index, field, value) => setFormData(prev => {
@@ -195,32 +285,36 @@ export default function CourierList() {
     }));
 
     const handleDocUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
         setUploadingDoc(true);
         try {
-            const res = await commonApi.uploadAttachment(file);
-            const data = res?.data || res;
-            const docEdid = data?.documentEdid || data?.edid;
-            const docOriginalName = data?.documentOriginalName || data?.documentOrginalName || file.name;
-            if (docEdid) {
-                setFormData(prev => ({
-                    ...prev,
-                    docEdid,
-                    documentEdid: docEdid,
-                    docFileName: docOriginalName,
-                    documentOriginalName: docOriginalName,
-                    documentOrginalName: docOriginalName
-                }));
-            }
+            const uploaded = await Promise.all(files.map(async file => {
+                const res = await commonApi.uploadAttachment(file);
+                const data = res?.data || res;
+                const attachmentEdid = data?.documentEdid || data?.edid || data?.attachmentEdid;
+                if (!attachmentEdid) return null;
+                return {
+                    attachmentEdid,
+                    attachmentOriginalName: data?.documentOriginalName || data?.documentOrginalName || file.name,
+                    attachmentType: 'Other',
+                    remarks: ''
+                };
+            }));
+            setFormData(prev => ({
+                ...prev,
+                attachments: [...prev.attachments, ...uploaded.filter(Boolean)]
+            }));
         } catch (err) {
             console.error('Failed to upload document:', err);
             alert('Failed to upload document. Please try again.');
         } finally {
             setUploadingDoc(false);
+            e.target.value = '';
         }
     };
 
+    // ── Save Courier (Adding via POST /api/couriers, Editing via PUT /api/couriers/{Edid}/{CourierName})
     const handleSaveCourier = async (e) => {
         e.preventDefault();
         if (!formData.name.trim()) {
@@ -231,53 +325,109 @@ export default function CourierList() {
         setModalError(null);
 
         const cleanMetadata = (formData.metadata || [])
-            .filter(m => m.label?.trim() && m.value?.trim())
+            .filter(m => (m.label && m.label.trim()) || (m.value && m.value.trim()))
             .map(m => ({
-                id: m.id || 0,
-                label: m.label.trim(),
-                value: m.value.trim(),
+                courierMasterId: Number(m.courierMasterId) || 0,
+                label: (m.label || '').trim(),
+                value: (m.value || '').trim(),
                 showInSlip: Boolean(m.showInSlip)
             }));
 
-        const payload = {
-            name: formData.name.trim(),
-            contactPerson: formData.contactPerson?.trim() || null,
-            mobile: formData.mobile?.trim() || null,
-            email: formData.email?.trim() || null,
-            address: formData.address?.trim() || null,
-            isActive: Boolean(formData.isActive),
-            attachmentData: formData.docEdid ? {
-                documentEdid: formData.docEdid,
-                documentOriginalName: formData.docFileName || null
-            } : null,
-            metadata: cleanMetadata
-        };
+        const attachmentData = formData.attachments
+            .filter(a => a && a.attachmentEdid)
+            .map(attachment => ({
+                attachmentEdid: attachment.attachmentEdid,
+                attachmentType: attachment.attachmentType || 'Other',
+                remarks: attachment.remarks || ''
+            }));
 
         try {
             if (editingCourier?.edid) {
-                payload.edid = editingCourier.edid;
-                await courierApi.updateCourier(editingCourier.edid, payload);
+                // EDIT: PUT /api/couriers/{Edid}/{CourierName}
+                const updatePayload = {
+                    edid: editingCourier.edid,
+                    name: formData.name.trim(),
+                    contactPerson: formData.contactPerson?.trim() || null,
+                    mobile: formData.mobile?.trim() || null,
+                    email: formData.email?.trim() || null,
+                    address: formData.address?.trim() || null,
+                    isActive: Boolean(formData.isActive),
+                    attachmentData,
+                    metadata: cleanMetadata
+                };
+                const routeName = editingCourier.name || formData.name.trim();
+                await courierApi.updateCourier(editingCourier.edid, routeName, updatePayload);
             } else {
-                await courierApi.addCourier(payload);
+                // ADD: POST /api/couriers
+                const createPayload = {
+                    name: formData.name.trim(),
+                    contactPerson: formData.contactPerson?.trim() || null,
+                    mobile: formData.mobile?.trim() || null,
+                    email: formData.email?.trim() || null,
+                    address: formData.address?.trim() || null,
+                    attachmentData,
+                    metadata: cleanMetadata
+                };
+                await courierApi.addCourier(createPayload);
             }
             await refetchCurrent();
             setIsModalOpen(false);
         } catch (err) {
             console.error('Failed to save courier:', err);
-            setModalError(err?.response?.data?.message || err?.message || 'Failed to save courier.');
+            setModalError(err?.message || 'Failed to save courier.');
         } finally {
             setIsSaving(false);
         }
     };
 
+    // ── Toggle Active status ─────────────────────────────────────────────────
     const handleToggleActive = async (courier) => {
         try {
-            await courierApi.updateCourier(courier.edid, {
-                edid: courier.edid,
-                name: courier.name,
+            const edid = courier.edid || courier.id;
+            let fullCourier = courier;
+            try {
+                const res = await courierApi.getCourier(edid, courier.name);
+                const data = res?.data || res;
+                if (data) fullCourier = { ...courier, ...data };
+            } catch {
+                // Use list item fallback
+            }
+
+            const cleanMetadata = (fullCourier.metadata || []).map(m => ({
+                courierMasterId: Number(m.courierMasterId) || 0,
+                label: (m.label || '').trim(),
+                value: (m.value || '').trim(),
+                showInSlip: Boolean(m.showInSlip)
+            }));
+
+            const attList = normalizeCourierAttachments(fullCourier.attachmentData || fullCourier.attachments);
+            const attachmentData = attList.length > 0
+                ? attList.map(({ attachmentEdid, attachmentType, remarks }) => ({
+                    moduleName: 'Courier',
+                    attachmentEdid,
+                    attachmentType: attachmentType || 'Other',
+                    remarks: remarks || ''
+                }))
+                : {
+                    moduleName: 'Courier',
+                    attachmentType: 'Other',
+                    attachmentEdid: '',
+                    remarks: ''
+                };
+
+            const payload = {
+                edid: edid,
+                name: fullCourier.name,
+                contactPerson: fullCourier.contactPerson || null,
+                mobile: fullCourier.mobile || null,
+                email: fullCourier.email || null,
+                address: fullCourier.address || null,
                 isActive: !courier.isActive,
-                metadata: courier.metadata
-            });
+                attachmentData,
+                metadata: cleanMetadata
+            };
+
+            await courierApi.updateCourier(edid, courier.name, payload);
             refetchCurrent();
         } catch (err) {
             console.error('Failed to toggle status:', err);
@@ -287,13 +437,11 @@ export default function CourierList() {
 
     // ── Pagination — totalCount & pages come from server ─────────────────────
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-    // couriers already contains only the current page's rows (server does the slicing)
-
     const hasActiveFilters = Boolean(searchTerm);
 
     const handleResetFilters = () => {
         setSearchTerm('');
-        setDebouncedSearch('');   // immediate — bypass debounce
+        setDebouncedSearch('');
         setStatusFilter('ACTIVE');
         setCurrentPage(1);
     };
@@ -306,7 +454,6 @@ export default function CourierList() {
                 subtitle="Manage courier master records, attachments, and dynamic fields printed on delivery slips"
                 rightContent={
                     <div className="flex items-center gap-2">
-
                         <button
                             type="button"
                             onClick={handleOpenAdd}
@@ -382,7 +529,11 @@ export default function CourierList() {
                     </TableHeader>
                     <TableBody>
                         {couriers.map((c, i) => (
-                            <TableRow key={c.edid || c.id || i}>
+                            <TableRow
+                                key={c.edid || c.id || i}
+                                className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                                onClick={() => handleViewCourier(c)}
+                            >
                                 <TableCell className="whitespace-nowrap font-medium text-slate-800">
                                     {c.name || '-'}
                                 </TableCell>
@@ -394,14 +545,17 @@ export default function CourierList() {
                                         {c.isActive ? 'ACTIVE' : 'DISABLED'}
                                     </span>
                                 </TableCell>
-                                <TableCell className="text-center" style={{ borderLeft: 'none' }}>
+                                <TableCell className="text-center" style={{ borderLeft: 'none' }} onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center justify-center gap-1">
                                         <Tooltip content="View">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 icon={Eye}
-                                                onClick={() => navigate(`/couriers/${c.edid || c.id}`)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleViewCourier(c);
+                                                }}
                                             />
                                         </Tooltip>
                                         <Tooltip content="Edit">
@@ -409,7 +563,10 @@ export default function CourierList() {
                                                 variant="ghost"
                                                 size="icon"
                                                 icon={Edit2}
-                                                onClick={() => handleOpenEdit(c)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenEdit(c);
+                                                }}
                                             />
                                         </Tooltip>
                                     </div>
@@ -419,7 +576,7 @@ export default function CourierList() {
                         {couriers.length === 0 && (
                             <TableRow className="hover:bg-transparent">
                                 <TableCell colSpan={6} className="text-center text-slate-400 py-16 font-medium">
-                                    No couriers found.
+                                    {loading ? 'Loading couriers...' : 'No couriers found.'}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -437,7 +594,7 @@ export default function CourierList() {
                 </div>
             </Card>
 
-            {/* ── Modal ───────────────────────────────────────────────────── */}
+            {/* ── Modal (Add or Edit) ───────────────────────────────────────── */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -515,44 +672,50 @@ export default function CourierList() {
                                     className="w-full h-9.5 px-3 bg-white border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-slate-800 outline-none transition-all"
                                 />
                             </div>
-                            <div className="sm:col-span-2">
-                                <label className="text-[11px] font-bold text-slate-700 block mb-1">Agreement Document / Logo (Optional)</label>
-                                {formData.docEdid ? (
-                                    <div className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs">
-                                        <div className="flex items-center gap-2 text-blue-900 font-semibold truncate">
-                                            <FileText size={16} className="text-blue-600 shrink-0" />
-                                            <span className="truncate">{formData.docFileName || 'Document Attached'}</span>
+                            <div className="sm:col-span-2 space-y-2">
+                                <label className="text-[11px] font-bold text-slate-700 block">Courier Documents</label>
+                                {formData.attachments.map((attachment, index) => (
+                                    <div key={attachment.attachmentEdid} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto_auto] items-center gap-2 p-2.5 bg-white border border-slate-200 rounded-lg">
+                                        <div className="flex items-center gap-2 min-w-0 text-xs font-semibold text-slate-700">
+                                            <FileText size={15} className="text-blue-600 shrink-0" />
+                                            <span className="truncate">{attachment.attachmentOriginalName || 'Attached document'}</span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, docEdid: null, docFileName: '' })}
-                                            className="text-rose-500 hover:text-rose-700 text-xs font-bold cursor-pointer"
+                                        <Dropdown
+                                            value={attachment.attachmentType}
+                                            options={attachmentTypes}
+                                            onChange={value => setFormData(prev => ({ ...prev, attachments: prev.attachments.map((item, i) => i === index ? { ...item, attachmentType: value } : item) }))}
+                                            placeholder="Document type"
+                                            className="w-full"
+                                        />
+                                        <input aria-label={`Remark for ${attachment.attachmentOriginalName || 'document'}`} value={attachment.remarks} onChange={e => setFormData(prev => ({ ...prev, attachments: prev.attachments.map((item, i) => i === index ? { ...item, remarks: e.target.value } : item) }))} placeholder="Add remark" className="h-9 px-2.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700" />
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setViewDoc({
+                                                url: `${API_BASE}/common/attachment/${attachment.attachmentEdid}/${encodeURIComponent(attachment.attachmentOriginalName || 'document')}`,
+                                                title: attachment.attachmentOriginalName || 'Courier Document',
+                                                fileName: attachment.attachmentOriginalName || ''
+                                            })} 
+                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" 
+                                            title="View document"
                                         >
-                                            Remove
+                                            <Eye size={14} />
+                                        </button>
+                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== index) }))} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg" title="Remove document">
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
-                                ) : (
-                                    <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-white p-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                                        <input type="file" accept="image/*,.pdf" onChange={handleDocUpload} className="hidden" />
-                                        {uploadingDoc ? (
-                                            <div className="flex items-center gap-2 text-xs text-blue-600 font-bold">
-                                                <Loader2 size={15} className="animate-spin" /> Uploading attachment...
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <Upload size={16} className="text-slate-400" />
-                                                <span className="text-xs font-bold text-slate-700">Attach Agreement / Document</span>
-                                                <span className="text-[10px] text-slate-400">(Images, PDF up to 10MB)</span>
-                                            </>
-                                        )}
-                                    </label>
-                                )}
+                                ))}
+                                <label className="border border-dashed border-slate-300 hover:border-blue-400 bg-white p-3 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                                    <input type="file" multiple accept="image/*,.pdf" onChange={handleDocUpload} className="hidden" />
+                                    {uploadingDoc ? <Loader2 size={15} className="animate-spin text-blue-600" /> : <Upload size={16} className="text-slate-400" />}
+                                    <span className="text-xs font-bold text-slate-700">{uploadingDoc ? 'Uploading documents...' : 'Add documents'}</span>
+                                    <span className="text-[10px] text-slate-400">(Images, PDF up to 10MB each)</span>
+                                </label>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-3.5">
-                        {/* Fixed Header: Added items-start and gap-4 to prevent overlap */}
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
                                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -567,7 +730,6 @@ export default function CourierList() {
                             <button
                                 type="button"
                                 onClick={handleAddMetaRow}
-                                /* Fixed Button: Added shrink-0 and whitespace-nowrap to prevent text wrapping and shrinking */
                                 className="shrink-0 whitespace-nowrap flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-blue-700 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
                             >
                                 <Plus size={13} /> Add Field
@@ -638,6 +800,14 @@ export default function CourierList() {
                     </div>
                 </form>
             </Modal>
+
+            <DocumentViewModal
+                isOpen={Boolean(viewDoc)}
+                onClose={() => setViewDoc(null)}
+                url={viewDoc?.url}
+                title={viewDoc?.title || 'Courier Document'}
+                fileName={viewDoc?.fileName || ''}
+            />
         </div>
     );
 }

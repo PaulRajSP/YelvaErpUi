@@ -112,6 +112,7 @@ export default function AppRoutes() {
                 <Route path="packing" element={<Packing />} />
                 <Route path="logistics" element={<Logistics />} />
                 <Route path="couriers" element={<CourierList />} />
+                <Route path="couriers/:edid/:courierName" element={<CourierDetail />} />
                 <Route path="couriers/:id" element={<CourierDetail />} />
                 <Route path="production" element={<Production />} />
                 <Route path="production/new" element={<NewProductionRequest />} />
