@@ -47,8 +47,9 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
     const [paymentReference, setPaymentReference] = useState('');
     const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [remark, setRemark] = useState('');
-    const [docEdid, setDocEdid] = useState(null);
-    const [docFileName, setDocFileName] = useState('');
+    const [attachmentData, setAttachmentData] = useState([]);
+    const attachmentEdid = attachmentData[0]?.attachmentEdid || null;
+    const docFileName = attachmentData[0]?.attachmentOriginalName || '';
     const [uploadingDoc, setUploadingDoc] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -70,34 +71,38 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
             setPaymentReference('');
             setPaymentDate(new Date().toISOString().slice(0, 10));
             setRemark('');
-            setDocEdid(null);
-            setDocFileName('');
+            setAttachmentData([]);
             setUploadingDoc(false);
-            setError(null);
+        setError(null);
             setLoading(false);
         }
     }, [isOpen, balanceAmount, totalAmount, amountPaid]);
 
     const handleDocUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
         setUploadingDoc(true);
         setError(null);
         try {
-            const res = await commonApi.uploadAttachment(file);
-            const data = res?.data || res;
-            const docEdid = data?.documentEdid || data?.edid;
-            const docName = data?.documentOriginalName || file.name;
-            if (docEdid) {
-                setDocEdid(docEdid);
-                setDocFileName(docName);
-            }
+            const uploaded = await Promise.all(files.map(async file => {
+                const res = await commonApi.uploadAttachment(file);
+                const data = res?.data || res;
+                const attachmentEdid = data?.documentEdid || data?.edid || data?.attachmentEdid;
+                return attachmentEdid ? {
+                    attachmentEdid,
+                    attachmentOriginalName: data?.documentOriginalName || file.name,
+                    attachmentType: 'Receipt',
+                    remarks: ''
+                } : null;
+            }));
+            setAttachmentData(prev => [...prev, ...uploaded.filter(Boolean)]);
         } catch (err) {
             console.error('Failed to upload payment document:', err);
             setError('Failed to upload payment document: ' + (err.message || 'Error'));
         } finally {
             setUploadingDoc(false);
+            e.target.value = '';
         }
     };
 
@@ -116,6 +121,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (loading) return;
         setError(null);
 
         const parsedAmount = parseFloat(amount);
@@ -131,7 +137,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                 setError(`Transaction reference / UTR is required for ${methodLabel}.`);
                 return;
             }
-            if (!docEdid) {
+            if (attachmentData.length === 0) {
                 setError(`Payment proof / receipt document is required for ${methodLabel}.`);
                 return;
             }
@@ -154,7 +160,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                 paymentReference: paymentReference.trim() || null,
                 paymentDate: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
                 remark: remark.trim() || null,
-                docEdid: docEdid || null,
+                attachmentData: attachmentData.map(({ attachmentEdid, attachmentType, remarks }) => ({ attachmentEdid, attachmentType, remarks })),
                 syncToLedger: true
             };
 
@@ -177,7 +183,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
             isOpen={isOpen}
             onClose={onClose}
             title="Record Order Payment"
-            className="max-w-lg"
+            className="max-w-xl"
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Order Summary Strip */}
@@ -341,35 +347,22 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                         )}
                     </div>
 
-                    {docEdid ? (
-                        <div className="flex items-center justify-between p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs">
-                            <div className="flex items-center gap-2 text-amber-900 font-semibold truncate">
-                                <FileText size={16} className="text-amber-600 shrink-0" />
-                                <span className="truncate">{docFileName || 'Payment Document Attached'}</span>
+                    {attachmentData.length > 0 && <div className="space-y-2 mb-2">
+                        {attachmentData.map((attachment, index) => (
+                            <div key={attachment.attachmentEdid} className="flex items-center justify-between gap-2 p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs">
+                                <span className="truncate text-amber-900 font-semibold">{attachment.attachmentOriginalName}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {index === 0 && <button type="button" onClick={() => setShowViewModal(true)} className="p-1 text-amber-700 hover:bg-amber-100 rounded-lg" title="View Document"><FileText size={15} /></button>}
+                                    <button type="button" onClick={() => setAttachmentData(prev => prev.filter((_, i) => i !== index))} className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg" title="Remove Document"><X size={15} /></button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowViewModal(true)}
-                                    className="p-1 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
-                                    title="View Document"
-                                >
-                                    <Eye size={15} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setDocEdid(null); setDocFileName(''); }}
-                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Remove Document"
-                                >
-                                    <X size={15} />
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
+                        ))}
+                    </div>}
+                    {
                         <label className={`border-2 border-dashed ${paymentMethod !== 'Cash' ? 'border-amber-300 hover:border-amber-400 bg-amber-50/20' : 'border-slate-200 hover:border-amber-400 bg-slate-50/50'} hover:bg-amber-50/30 p-3.5 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors`}>
                             <input
                                 type="file"
+                                multiple
                                 accept="image/*,.pdf"
                                 onChange={handleDocUpload}
                                 className="hidden"
@@ -387,7 +380,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                                 </>
                             )}
                         </label>
-                    )}
+                    }
                 </div>
 
                 {/* Remarks */}
@@ -425,11 +418,11 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                 </div>
             </form>
 
-            {docEdid && (
+            {attachmentEdid && (
                 <DocumentViewModal
                     isOpen={showViewModal}
                     onClose={() => setShowViewModal(false)}
-                    url={`${API_BASE}/common/attachment/${docEdid}`}
+                    url={`${API_BASE}/common/attachment/${attachmentEdid}/${encodeURIComponent(docFileName || 'Payment_Proof')}`}
                     title="Payment Proof Preview"
                     fileName={docFileName}
                 />

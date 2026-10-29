@@ -531,7 +531,7 @@ export default function CustomerDetails() {
                           <TableCell className="font-medium text-slate-600 text-xs text-left">
                             {formatDateTime(order.createdAt)}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-left"> {/* Fixed alignment from text-center to text-left */}
                             <span className="font-bold uppercase text-slate-700">
                               {order.deliveryType || 'Standard'}
                             </span>
@@ -550,13 +550,12 @@ export default function CustomerDetails() {
                             </span>
                           </TableCell>
                           <TableCell className="text-center">
-                            <span className={`font-bold uppercase ${
-                              (order.orderStatus || order.status || '').toUpperCase() === 'DELIVERED' ? 'text-emerald-600' :
-                              (order.orderStatus || order.status || '').toUpperCase() === 'SHIPPED' ? 'text-blue-600' :
-                              (order.orderStatus || order.status || '').toUpperCase() === 'READYTOSHIP' ? 'text-indigo-600' :
-                              (order.orderStatus || order.status || '').toUpperCase() === 'PACKING' ? 'text-purple-600' :
-                              'text-slate-600'
-                            }`}>
+                            <span className={`font-bold uppercase ${(order.orderStatus || order.status || '').toUpperCase() === 'DELIVERED' ? 'text-emerald-600' :
+                                (order.orderStatus || order.status || '').toUpperCase() === 'SHIPPED' ? 'text-blue-600' :
+                                  (order.orderStatus || order.status || '').toUpperCase() === 'READYTOSHIP' ? 'text-indigo-600' :
+                                    (order.orderStatus || order.status || '').toUpperCase() === 'PACKING' ? 'text-purple-600' :
+                                      'text-slate-600'
+                              }`}>
                               {formatOrderStatus(order.orderStatus || order.status) || 'Order Placed'}
                             </span>
                           </TableCell>

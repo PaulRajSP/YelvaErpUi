@@ -32,7 +32,7 @@ export function clearStoredAuth() {
  * envelope returned by the .NET backend.
  * Uses localStorage for authentication tokens (no cookies).
  *
- * @param {string} endpoint  - relative endpoint, e.g. 'auth/login' or 'employees/list'
+ * @param {string} endpoint  - relative endpoint, e.g. 'auth/login' or 'couriers/list'
  * @param {string} method    - HTTP method (default: 'GET')
  * @param {object|null} body - request body (will be JSON-serialised)
  * @returns {Promise<any>}   - the `data` field of the response, or throws on error
@@ -63,15 +63,20 @@ export async function apiFetch(endpoint, method = 'GET', body = null) {
         if (body !== null) options.body = isFormData ? body : JSON.stringify(body);
 
         try {
-            const res = await fetch(`${API_BASE}/${endpoint}`, options);
+            const url = endpoint.startsWith('http://') || endpoint.startsWith('https://')
+                ? endpoint
+                : `${API_BASE}/${endpoint.replace(/^\/+/, '')}`;
+            const res = await fetch(url, options);
 
-            // Handle unauthorized response
+            // Handle unauthorized response (only clear local auth for local API calls, not external upload)
             if (res.status === 401) {
-                console.warn(`[apiFetch] 401 Unauthorized for ${endpoint}. Clearing local storage.`);
-                clearStoredAuth();
-                // Dispatch event so app/context can react if needed
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+                const isExternal = endpoint.startsWith('http://') || endpoint.startsWith('https://');
+                if (!isExternal) {
+                    console.warn(`[apiFetch] 401 Unauthorized for ${endpoint}. Clearing local storage.`);
+                    clearStoredAuth();
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+                    }
                 }
                 throw new Error('Session expired or unauthorized. Please log in again.');
             }
@@ -80,7 +85,18 @@ export async function apiFetch(endpoint, method = 'GET', body = null) {
                 let errMessage = `HTTP ${res.status} on ${endpoint}`;
                 try {
                     const errJson = await res.json();
-                    if (errJson?.message) errMessage = errJson.message;
+                    if (errJson?.message) {
+                        errMessage = errJson.message;
+                    } else if (errJson?.errors && typeof errJson.errors === 'object') {
+                        const errorList = Object.values(errJson.errors).flat().filter(Boolean);
+                        if (errorList.length > 0) {
+                            errMessage = errorList.join(' ');
+                        } else if (errJson?.title) {
+                            errMessage = errJson.title;
+                        }
+                    } else if (errJson?.title) {
+                        errMessage = errJson.title;
+                    }
                 } catch {
                     // Ignore json parse error on non-json error responses
                 }

@@ -414,19 +414,19 @@ export default function MaterialDetails() {
                                                         {purchase.quantity} <span className="text-[10px] text-slate-400 uppercase font-bold ml-0.5">{unitSymbol}</span>
                                                     </TableCell>
                                                     <TableCell className="text-center pr-6" style={{ borderLeft: 'none' }}>
-                                                        {purchase.docEdid ? (
-                                                            <Tooltip content="View Purchase Document">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    icon={Eye}
-                                                                    onClick={() => setViewDoc({
-                                                                        url: `${API_BASE}/common/attachment/${purchase.docEdid}`,
-                                                                        title: `Purchase Document · Invoice #${purchase.invoiceNumber || ''}`,
-                                                                        fileName: `Purchase_Invoice_${purchase.invoiceNumber || 'doc'}`
-                                                                    })}
-                                                                />
-                                                            </Tooltip>
+                                                        {purchase.attachmentData?.length > 0 ? (
+                                                            <div className="flex justify-center gap-1">
+                                                                {purchase.attachmentData.map((attachment, attachmentIndex) => {
+                                                                    const fileName = attachment.attachmentOriginalName || `Purchase_Invoice_${purchase.invoiceNumber || 'doc'}_${attachmentIndex + 1}`;
+                                                                    return <Tooltip key={attachment.attachmentEdid} content={fileName}>
+                                                                        <Button variant="ghost" size="icon" icon={FileText} onClick={() => setViewDoc({
+                                                                            url: `${API_BASE}/common/attachment/${attachment.attachmentEdid}/${encodeURIComponent(fileName)}`,
+                                                                            title: `Purchase Document · Invoice #${purchase.invoiceNumber || ''}`,
+                                                                            fileName
+                                                                        })} />
+                                                                    </Tooltip>;
+                                                                })}
+                                                            </div>
                                                         ) : (
                                                             <Tooltip content="View Purchase Details">
                                                                 <Button

@@ -933,19 +933,19 @@ export default function OrderDetails() {
                                                                 ₹{Number(p.amount).toLocaleString('en-IN')}
                                                             </TableCell>
                                                             <TableCell className="text-center" style={{ borderLeft: 'none' }}>
-                                                                {p.docEdid ? (
-                                                                    <Tooltip content="View Receipt">
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            icon={Eye}
-                                                                            onClick={() => setViewDoc({
-                                                                                url: `${API_BASE}/common/attachment/${p.docEdid}/${encodeURIComponent(p.paymentReference ? `Receipt_${p.paymentReference}` : 'Payment_Receipt')}`,
-                                                                                title: `Payment Receipt (${p.paymentMethod || 'Proof'})`,
-                                                                                fileName: p.paymentReference ? `Receipt_${p.paymentReference}` : 'Payment_Receipt'
-                                                                            })}
-                                                                        />
-                                                                    </Tooltip>
+                                                                {p.attachmentData?.length ? (
+                                                                    <div className="flex justify-center gap-1">
+                                                                        {p.attachmentData.map((attachment, attachmentIndex) => {
+                                                                            const fileName = attachment.attachmentOriginalName || `Payment_Receipt_${attachmentIndex + 1}`;
+                                                                            return <Tooltip key={attachment.attachmentEdid} content={fileName}>
+                                                                                <Button variant="ghost" size="icon" icon={FileText} onClick={() => setViewDoc({
+                                                                                    url: `${API_BASE}/common/attachment/${attachment.attachmentEdid}/${encodeURIComponent(fileName)}`,
+                                                                                    title: fileName,
+                                                                                    fileName
+                                                                                })} />
+                                                                            </Tooltip>;
+                                                                        })}
+                                                                    </div>
                                                                 ) : (
                                                                     <span className="text-slate-300 text-xs">—</span>
                                                                 )}
@@ -1100,16 +1100,16 @@ export default function OrderDetails() {
                                                                     </span>
                                                                 </TableCell>
                                                                 <TableCell className="text-center" style={{ borderLeft: 'none' }}>
-                                                                    {p.slipDocument ? (
+                                                                    {p.attachmentData?.length ? (
                                                                         <Tooltip content="View Courier Slip">
                                                                             <Button
                                                                                 variant="ghost"
                                                                                 size="icon"
-                                                                                icon={Eye}
+                                                                                icon={FileText}
                                                                                 onClick={() => setViewDoc({
-                                                                                    url: `${API_BASE}/common/attachment/${p.slipDocument}/${encodeURIComponent(`Courier_Slip_${order.orderNumber || 'package'}`)}`,
+                                                                                    url: `${API_BASE}/common/attachment/${p.attachmentData[0].attachmentEdid}/${encodeURIComponent(p.attachmentData[0].attachmentOriginalName || `Courier_Slip_${order.orderNumber || 'package'}`)}`,
                                                                                     title: `Courier Slip · Order #${order.orderNumber || ''}`,
-                                                                                    fileName: `Courier_Slip_${order.orderNumber || 'package'}`
+                                                                                    fileName: p.attachmentData[0].attachmentOriginalName || `Courier_Slip_${order.orderNumber || 'package'}`
                                                                                 })}
                                                                             />
                                                                         </Tooltip>

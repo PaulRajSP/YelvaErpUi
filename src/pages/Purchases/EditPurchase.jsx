@@ -233,13 +233,24 @@ export default function EditPurchase() {
                 amountPaid: purchase.amountPaid || "",
                 items: purchase.items.map(i => ({ ...i, qty: String(i.qty), rate: String(i.rate) }))
             });
-            if (purchase.attachmentData?.documentEdid) {
+            const purchaseAttachments = Array.isArray(purchase.attachmentData)
+                ? purchase.attachmentData
+                : (purchase.attachmentData ? [purchase.attachmentData] : []);
+            if (purchaseAttachments.length > 0) {
+                const bill = purchaseAttachments.find(item => item.attachmentType === 'Bill') || purchaseAttachments[0];
                 setBillAttachment({
-                    documentEdid: purchase.attachmentData.documentEdid,
-                    name: purchase.attachmentData.documentOriginalName || 'Purchase Bill',
-                    remark: '',
+                    attachmentEdid: bill.attachmentEdid || bill.documentEdid,
+                    name: bill.attachmentOriginalName || bill.documentOriginalName || 'Purchase Bill',
+                    remark: bill.remarks || '',
                     isBill: true
                 });
+                const others = purchaseAttachments.filter(item => item !== bill).map(item => ({
+                    attachmentEdid: item.attachmentEdid || item.documentEdid,
+                    name: item.attachmentOriginalName || item.documentOriginalName || 'Purchase attachment',
+                    remark: item.remarks || '',
+                    isBill: false
+                }));
+                setOtherAttachments(others);
             } else if (purchase.attachments) {
                 const bill = purchase.attachments.find(a => a.isBill);
                 const others = purchase.attachments.filter(a => !a.isBill);

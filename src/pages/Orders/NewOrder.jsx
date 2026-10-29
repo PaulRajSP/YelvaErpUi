@@ -76,7 +76,7 @@ export default function NewOrder() {
     const [upiRef, setUpiRef] = useState('');
     const [paidAmount, setPaidAmount] = useState('');
     const [isPaidAmountCustom, setIsPaidAmountCustom] = useState(false);
-    const [paymentDocEdid, setPaymentDocEdid] = useState(null);
+    const [paymentAttachmentEdid, setPaymentAttachmentEdid] = useState(null);
     const [paymentDocFileName, setPaymentDocFileName] = useState('');
     const [uploadingPaymentDoc, setUploadingPaymentDoc] = useState(false);
 
@@ -427,10 +427,10 @@ export default function NewOrder() {
         try {
             const res = await commonApi.uploadAttachment(file);
             const data = res?.data || res;
-            const docEdid = data?.documentEdid || data?.edid;
+            const attachmentEdid = data?.attachmentEdid || data?.documentEdid || data?.edid;
             const docName = data?.documentOriginalName || file.name;
-            if (docEdid) {
-                setPaymentDocEdid(docEdid);
+            if (attachmentEdid) {
+                setPaymentAttachmentEdid(attachmentEdid);
                 setPaymentDocFileName(docName);
             }
         } catch (err) {
@@ -455,7 +455,7 @@ export default function NewOrder() {
     const handlePayment = async () => {
         if (!selectedCustomer || !selectedAddress || cart.length === 0) return;
         if (paymentMethod === 'UPI' && !upiRef.trim()) return;
-        if (paymentMethod === 'UPI' && Number(paidAmount) > 0 && !paymentDocEdid) {
+        if (paymentMethod === 'UPI' && Number(paidAmount) > 0 && !paymentAttachmentEdid) {
             setOrderError('Payment screenshot / receipt is required when paid amount is entered.');
             return;
         }
@@ -485,8 +485,11 @@ export default function NewOrder() {
                 paidAmount: finalPaid,
                 paymentMethod,
                 upiRef: paymentMethod === 'UPI' ? upiRef : null,
-                paymentDocEdid: paymentMethod !== 'Cash' ? (paymentDocEdid || null) : null,
-                docEdid: paymentMethod !== 'Cash' ? (paymentDocEdid || null) : null,
+                paymentAttachmentData: paymentMethod !== 'Cash' && paymentAttachmentEdid ? [{
+                    attachmentEdid: paymentAttachmentEdid,
+                    attachmentType: 'Receipt',
+                    remarks: ''
+                }] : [],
                 paymentStatus: isFull ? 'PAID' : (finalPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
                 initialPaymentType: isFull ? 'FullPayment' : 'Advance',
                 status: initialOrderStatus || 'OrderPlaced',
@@ -1252,7 +1255,7 @@ export default function NewOrder() {
                                                 <label className="text-xs text-slate-500 mb-1.5 block">
                                                     Payment Attachment / Screenshot {Number(paidAmount) > 0 && <span className="text-red-500 font-bold">*</span>}
                                                 </label>
-                                                {paymentDocEdid ? (
+                                                {paymentAttachmentEdid ? (
                                                     <div className="flex items-center justify-between p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center gap-2 text-amber-900 font-semibold truncate">
                                                             <FileText size={15} className="text-amber-600 shrink-0" />
@@ -1260,7 +1263,7 @@ export default function NewOrder() {
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            onClick={(e) => { e.stopPropagation(); setPaymentDocEdid(null); setPaymentDocFileName(''); }}
+                                                            onClick={(e) => { e.stopPropagation(); setPaymentAttachmentEdid(null); setPaymentDocFileName(''); }}
                                                             className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer transition-colors"
                                                         >
                                                             <X size={14} />
@@ -1293,7 +1296,7 @@ export default function NewOrder() {
                                                         )}
                                                     </label>
                                                 )}
-                                                {Number(paidAmount) > 0 && !paymentDocEdid && (
+                                                {Number(paidAmount) > 0 && !paymentAttachmentEdid && (
                                                     <p className="text-[11px] text-amber-700 mt-1.5 font-medium flex items-center gap-1">
                                                         <Info size={12} className="shrink-0 text-amber-600" />
                                                         Payment screenshot / receipt is required when amount is entered.
@@ -1342,7 +1345,7 @@ export default function NewOrder() {
 
                         <button
                             onClick={handlePayment}
-                            disabled={(paymentMethod === 'UPI' && (!upiRef.trim() || (Number(paidAmount) > 0 && !paymentDocEdid))) || isSubmittingOrder || uploadingPaymentDoc}
+                            disabled={(paymentMethod === 'UPI' && (!upiRef.trim() || (Number(paidAmount) > 0 && !paymentAttachmentEdid))) || isSubmittingOrder || uploadingPaymentDoc}
                             className="cursor-pointer w-full bg-[#ffc107] text-slate-900 py-3.5 rounded-xl font-black text-[15px] hover:bg-[#e0a800] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex justify-center items-center gap-2 mb-4"
                         >
                             {isSubmittingOrder ? (

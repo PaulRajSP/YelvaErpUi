@@ -90,8 +90,7 @@ export default function ExpenseList() {
         referenceNumber: '',
         status: '',
         remarks: '',
-        docEdid: '',
-        docFileName: ''
+        attachmentData: []
     });
 
     // Load enum types from commonApi dynamically
@@ -186,23 +185,28 @@ export default function ExpenseList() {
 
     // Handle receipt file upload
     const handleFileUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
         setUploadingReceipt(true);
         setFormError('');
         try {
-            const res = await commonApi.uploadAttachment(file);
-            const data = res?.data || res;
-            const docEdid = data?.documentEdid || data?.edid;
-            const docName = data?.documentOriginalName || file.name;
-            if (docEdid) {
-                setFormData(prev => ({
-                    ...prev,
-                    docEdid: docEdid,
-                    docFileName: docName
-                }));
-            }
+            const uploaded = await Promise.all(files.map(async file => {
+                const res = await commonApi.uploadAttachment(file);
+                const data = res?.data || res;
+                const attachmentEdid = data?.documentEdid || data?.edid || data?.attachmentEdid;
+                if (!attachmentEdid) return null;
+                return {
+                    attachmentEdid,
+                    attachmentOriginalName: data?.documentOriginalName || file.name,
+                    attachmentType: 'Receipt',
+                    remarks: ''
+                };
+            }));
+            setFormData(prev => ({
+                ...prev,
+                attachmentData: [...prev.attachmentData, ...uploaded.filter(Boolean)]
+            }));
         } catch (err) {
             console.error('Failed to upload receipt:', err);
             setFormError('Failed to upload receipt: ' + (err.message || 'Error'));
@@ -226,8 +230,7 @@ export default function ExpenseList() {
             referenceNumber: '',
             status: statusOptions.find(o => o !== 'All') || '',
             remarks: '',
-            docEdid: '',
-            docFileName: ''
+            attachmentData: []
         });
         setIsFormOpen(true);
     };
@@ -246,8 +249,7 @@ export default function ExpenseList() {
             referenceNumber: item.referenceNumber || '',
             status: item.status || '',
             remarks: item.remarks || '',
-            docEdid: item.docEdid || '',
-            docFileName: item.docEdid ? 'Attached Receipt' : ''
+            attachmentData: Array.isArray(item.attachmentData) ? item.attachmentData : []
         });
         setIsFormOpen(true);
     };
@@ -298,7 +300,11 @@ export default function ExpenseList() {
                 referenceNumber: formData.referenceNumber?.trim() || null,
                 status: formData.status,
                 remarks: formData.remarks?.trim() || null,
-                docEdid: formData.docEdid || null,
+                attachmentData: (formData.attachmentData || []).map(({ attachmentEdid, attachmentType, remarks }) => ({
+                    attachmentEdid,
+                    attachmentType: attachmentType || 'Receipt',
+                    remarks: remarks || ''
+                })),
                 recordedBy: activeUser
             };
 
@@ -638,7 +644,7 @@ export default function ExpenseList() {
 
                                         {/* Receipt Attachment */}
                                         <TableCell className="text-center text-sm">
-                                            {item.docEdid ? (
+                                            {item.attachmentData?.length > 0 ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenReceipt(item)}
@@ -654,11 +660,11 @@ export default function ExpenseList() {
                                         {/* Actions */}
                                         <TableCell className="text-center text-sm text-slate-700">
                                             <div className="flex justify-center items-center gap-1">
-                                                {item.docEdid && (
+                                                {item.attachmentData?.length > 0 && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        icon={Eye}
+                                                        icon={FileText}
                                                         onClick={() => handleOpenReceipt(item)}
                                                         title="View Bill Receipt"
                                                     />
@@ -818,6 +824,7 @@ export default function ExpenseList() {
                                     <span>{uploadingReceipt ? 'Uploading...' : 'Choose File'}</span>
                                     <input
                                         type="file"
+                                        multiple
                                         className="hidden"
                                         accept="image/*,.pdf,.txt"
                                         onChange={handleFileUpload}
@@ -825,18 +832,15 @@ export default function ExpenseList() {
                                     />
                                 </label>
                                 <span className="text-xs text-slate-500 truncate flex-1">
-                                    {formData.docFileName || (formData.docEdid ? 'Receipt uploaded' : 'No bill/receipt attached (optional)')}
+                                    {formData.attachmentData.length ? `${formData.attachmentData.length} receipt(s) attached` : 'No bill/receipt attached (optional)'}
                                 </span>
-                                {formData.docEdid && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, docEdid: '', docFileName: '' })}
-                                        className="text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer"
-                                    >
-                                        Remove
-                                    </button>
-                                )}
                             </div>
+                            {formData.attachmentData.map((attachment, index) => (
+                                <div key={attachment.attachmentEdid} className="flex items-center justify-between gap-2 px-3 py-2 mt-2 bg-white border border-slate-200 rounded-lg text-xs">
+                                    <span className="truncate text-slate-700">{attachment.attachmentOriginalName}</span>
+                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, attachmentData: prev.attachmentData.filter((_, i) => i !== index) }))} className="text-red-500 hover:text-red-700 font-semibold">Remove</button>
+                                </div>
+                            ))}
                         </div>
 
                         {/* Remarks */}

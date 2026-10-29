@@ -108,7 +108,7 @@ export default function Orders() {
             dateFrom,
             dateTo
         }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [debouncedSearch, dateFrom, dateTo, statusFilter, paymentFilter]);
 
     // ── Background API fetch (does NOT wipe table rows while loading) ────────

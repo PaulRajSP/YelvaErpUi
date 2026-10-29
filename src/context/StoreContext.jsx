@@ -526,7 +526,7 @@ export function StoreProvider({ children }) {
                 initialPaymentMethod: order.paymentMethod || 'UPI',
                 initialPaymentReference: order.upiRef || order.paymentReference || null,
                 initialPaymentType: order.initialPaymentType || ((Number(order.paidAmount || order.totalAmount) >= Number(order.totalAmount)) ? 'FullPayment' : 'Advance'),
-                initialPaymentDocEdid: order.paymentDocEdid || order.docEdid || null,
+                initialPaymentAttachmentData: order.paymentAttachmentData || [],
             },
             items: order.items.map(i => ({
                 productEdid: i.productId || i.productEdid,

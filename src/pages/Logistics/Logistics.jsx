@@ -72,8 +72,7 @@ export default function Logistics() {
     const [courier, setCourier] = useState('');
     const [trackingNumber, setTrackingNumber] = useState('');
     const [courierCharge, setCourierCharge] = useState('');
-    const [slipDocumentEdid, setSlipDocumentEdid] = useState(null);
-    const [slipFileName, setSlipFileName] = useState('');
+    const [slipAttachments, setSlipAttachments] = useState([]);
     const [uploadingSlip, setUploadingSlip] = useState(false);
     const [submittingDispatch, setSubmittingDispatch] = useState(false);
     const [dispatchError, setDispatchError] = useState(null);
@@ -99,7 +98,6 @@ export default function Logistics() {
                     id: c.id,
                     edid: c.edid,
                     metadata: c.metadata || [],
-                    docEdid: c.docEdid,
                     label: c.name + (c.mobile ? ` (${c.mobile})` : '')
                 }));
                 setCourierOptions(dbOptions);
@@ -165,24 +163,29 @@ export default function Logistics() {
 
     // File Upload Handler
     const handleFileUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
         setUploadingSlip(true);
         try {
-            const res = await commonApi.uploadAttachment(file);
-            const data = res?.data || res;
-            const docEdid = data?.documentEdid || data?.edid;
-            const docName = data?.documentOriginalName || file.name;
-            if (docEdid) {
-                setSlipDocumentEdid(docEdid);
-                setSlipFileName(docName);
-            }
+            const uploaded = await Promise.all(files.map(async file => {
+                const res = await commonApi.uploadAttachment(file);
+                const data = res?.data || res;
+                const attachmentEdid = data?.documentEdid || data?.edid || data?.attachmentEdid;
+                return attachmentEdid ? {
+                    attachmentEdid,
+                    attachmentOriginalName: data?.documentOriginalName || file.name,
+                    attachmentType: 'CourierSlip',
+                    remarks: ''
+                } : null;
+            }));
+            setSlipAttachments(prev => [...prev, ...uploaded.filter(Boolean)]);
         } catch (err) {
             console.error('Failed to upload slip document:', err);
             alert('Failed to upload courier slip. Please try again.');
         } finally {
             setUploadingSlip(false);
+            e.target.value = '';
         }
     };
 
@@ -192,8 +195,7 @@ export default function Logistics() {
         setCourier(order?.courier || courierOptions[0]?.value || '');
         setTrackingNumber('');
         setCourierCharge('');
-        setSlipDocumentEdid(null);
-        setSlipFileName('');
+        setSlipAttachments([]);
         setDispatchError(null);
         loadCouriers(''); // fetch fresh list from API without caching
     };
@@ -226,7 +228,7 @@ export default function Logistics() {
                 tracking: trackingNumber.trim(),
                 trackingNumber: trackingNumber.trim(),
                 courierCharge: courierCharge ? parseFloat(courierCharge) : null,
-                slipDocument: slipDocumentEdid,
+                attachmentData: slipAttachments.map(({ attachmentEdid, attachmentType, remarks }) => ({ attachmentEdid, attachmentType, remarks })),
                 totalWeight: selectedOrder?.package?.weight ? parseFloat(selectedOrder.package.weight) : null,
                 handedOverBy: currentUser?.employeeCode || 'EMP001',
                 handedOverAt: new Date().toISOString()
@@ -513,24 +515,20 @@ export default function Logistics() {
                                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                     Courier Slip Document / Photo
                                 </label>
-                                {slipDocumentEdid ? (
-                                    <div className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs">
+                                {slipAttachments.map((attachment, index) => (
+                                    <div key={attachment.attachmentEdid} className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs mb-2">
                                         <div className="flex items-center gap-2 text-blue-900 font-semibold truncate">
                                             <FileText size={16} className="text-blue-600 shrink-0" />
-                                            <span className="truncate">{slipFileName || 'Courier Slip Uploaded'}</span>
+                                            <span className="truncate">{attachment.attachmentOriginalName}</span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSlipDocumentEdid(null); setSlipFileName(''); }}
-                                            className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer"
-                                        >
-                                            Remove
-                                        </button>
+                                        <button type="button" onClick={() => setSlipAttachments(prev => prev.filter((_, i) => i !== index))} className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer">Remove</button>
                                     </div>
-                                ) : (
+                                ))}
+                                {
                                     <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 p-4 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors">
                                         <input
                                             type="file"
+                                            multiple
                                             accept="image/*,.pdf"
                                             onChange={handleFileUpload}
                                             className="hidden"
@@ -547,7 +545,7 @@ export default function Logistics() {
                                             </>
                                         )}
                                     </label>
-                                )}
+                                }
                             </div>
 
                             {/* Modal Actions */}
