@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { PAGE_SIZE } from '../common/utils';
 import { authApi } from '../api/authApi';
 import { TOKEN_KEY, USER_KEY, PERMISSIONS_KEY, MENUS_KEY, setStoredToken, clearStoredAuth } from '../services/apiClient';
@@ -82,21 +82,91 @@ export function StoreProvider({ children }) {
     const [customerOrderFiltersMap, setCustomerOrderFiltersMap] = useState({});
 
     // ─── Per-module load guards (prevents duplicate concurrent fetches) ───────────
-    const isLoaded = useRef({
-        products: false, customers: false, orders: false,
-        suppliers: false, rawMaterials: false, purchases: false, transactions: false
-    });
     const isLoading = useRef({
         products: false, customers: false, orders: false,
         suppliers: false, rawMaterials: false, purchases: false, transactions: false
     });
 
+    useLayoutEffect(() => {
+        const handleCacheUpdate = event => {
+            const { endpoint, body, data } = event.detail;
+            const items = data?.items || [];
+
+            if (
+                endpoint === 'products/list' &&
+                body?.pagination?.pageNumber === 1 &&
+                body?.pagination?.pageSize === 100 &&
+                body?.searchKeyword == null &&
+                body?.isCombo == null &&
+                body?.isActive == null
+            ) {
+                setProducts(items.map(product => {
+                    const price = typeof product.price === 'object' ? (product.price?.price ?? 0) : (product.price ?? 0);
+                    const mrp = typeof product.mrp === 'object' ? (product.mrp?.mrp ?? product.mrp?.price ?? 0) : (product.mrp ?? 0);
+                    return {
+                        ...product,
+                        price,
+                        mrp,
+                        prices: { DIRECT: price, ONLINE: price, WHOLESALE: price },
+                        mrps: { DIRECT: mrp, ONLINE: mrp, WHOLESALE: mrp },
+                        recipe: product.recipe || [],
+                        comboItems: product.comboItems || [],
+                        allowedCustomerTypes: ['DIRECT', 'ONLINE', 'WHOLESALE']
+                    };
+                }));
+            }
+
+            if (endpoint === 'orders/list') {
+                setOrders(items.map(order => ({
+                    ...order,
+                    id: order.edid || order.id,
+                    items: order.items || []
+                })));
+                setOrderTotal(data?.totalCount ?? 0);
+            }
+
+            if (endpoint === 'raw-materials/list' && body?.pagination?.pageSize === 100) {
+                setRawMaterials(items.map(material => ({
+                    id: material.edid,
+                    edid: material.edid,
+                    name: material.name,
+                    category: material.category,
+                    unit: material.allowedUnitSymbol || material.unitSymbol || '',
+                    unitEdid: material.unitEdid || material.allowedUnitEdid || '',
+                    unitSymbol: material.allowedUnitSymbol || material.unitSymbol || '',
+                    stock: material.stock,
+                    minQuantity: material.minQuantity,
+                    reorderLevel: material.reorderLevel
+                })));
+            }
+
+            if (endpoint === 'purchases/list') {
+                setPurchases(previous => items.map(purchase => ({
+                    ...purchase,
+                    items: previous.find(existing => existing.id === purchase.id)?.items || []
+                })));
+            }
+
+            if (endpoint === 'purchases/items' && body?.purchaseEdid) {
+                const purchaseItems = Array.isArray(data) ? data : items;
+                setPurchases(previous => previous.map(purchase =>
+                    purchase.id === body.purchaseEdid
+                        ? { ...purchase, items: purchaseItems }
+                        : purchase
+                ));
+            }
+        };
+
+        window.addEventListener('api:cache-updated', handleCacheUpdate);
+        return () => window.removeEventListener('api:cache-updated', handleCacheUpdate);
+    }, []);
+
     // ─── Load functions ──────────────────────────────────────────────────────────
     // Each function delegates API calls entirely to the relevant api/ module.
-    // Guards prevent re-fetching already-loaded data within the same session.
+    // Cached API responses render immediately and refresh in the background on each load.
 
-    const loadProducts = useCallback(async (force = false) => {
-        if (!force && (isLoaded.current.products || isLoading.current.products)) return;
+    const loadProducts = useCallback(async () => {
+        if (isLoading.current.products) return;
         isLoading.current.products = true;
         try {
             const res = await productApi.getProducts(1, 100) || {};
@@ -116,34 +186,30 @@ export function StoreProvider({ children }) {
                 };
             });
             setProducts(mappedProducts);
-            isLoaded.current.products = true;
         } catch (e) {
             console.error('Error loading products:', e);
-            isLoaded.current.products = true;
         } finally {
             isLoading.current.products = false;
         }
     }, []);
 
     const loadCustomers = useCallback(async () => {
-        if (isLoaded.current.customers || isLoading.current.customers) return;
+        if (isLoading.current.customers) return;
         isLoading.current.customers = true;
         try {
             const res = await customerApi.getCustomers(1, 1000) || {};
             const customersData = res.items || [];
             setCustomers(customersData);
             setCustomerTotal(res.totalCount || 0);
-            isLoaded.current.customers = true;
         } catch (e) {
             console.error('Error loading customers:', e);
-            isLoaded.current.customers = true;
         } finally {
             isLoading.current.customers = false;
         }
     }, []);
 
     /**
-     * Search customers by mobile — always fresh, bypasses the isLoaded guard.
+     * Search customers by mobile — always fetches the latest matching results.
      * Returns { items, totalCount }.
      */
     const searchCustomers = useCallback(async (mobile = '', pageNumber = 1, pageSize = 10) => {
@@ -196,7 +262,6 @@ export function StoreProvider({ children }) {
                 return mappedOrders;
             });
             setOrderTotal(prev => prev === total ? prev : total);
-            isLoaded.current.orders = true;
             return { items: mappedOrders, totalCount: total };
         } catch (e) {
             console.error('Error loading orders:', e);
@@ -231,22 +296,20 @@ export function StoreProvider({ children }) {
     }, []);
 
     const loadSuppliers = useCallback(async () => {
-        if (isLoaded.current.suppliers || isLoading.current.suppliers) return;
+        if (isLoading.current.suppliers) return;
         isLoading.current.suppliers = true;
         try {
             const res = await purchaseApi.getSuppliers() || {};
             setSuppliers(res.items || []);
-            isLoaded.current.suppliers = true;
         } catch (e) {
             console.error('Error loading suppliers:', e);
-            isLoaded.current.suppliers = true;
         } finally {
             isLoading.current.suppliers = false;
         }
     }, []);
 
     /**
-     * Search suppliers by name, contact name, and type — always fresh, bypasses the isLoaded guard.
+     * Search suppliers by name, contact name, and type — always fetches the latest matching results.
      * Returns { items, totalCount }.
      */
     const searchSuppliers = useCallback(async (name = null, contactName = null, supplierType = null, pageNumber = 1, pageSize = 10) => {
@@ -284,8 +347,8 @@ export function StoreProvider({ children }) {
         }
     }, []);
 
-    const loadRawMaterials = useCallback(async (force = false) => {
-        if (!force && (isLoaded.current.rawMaterials || isLoading.current.rawMaterials)) return;
+    const loadRawMaterials = useCallback(async () => {
+        if (isLoading.current.rawMaterials) return;
         isLoading.current.rawMaterials = true;
         try {
             const res = await purchaseApi.getRawMaterials(1, 100) || {};
@@ -303,17 +366,15 @@ export function StoreProvider({ children }) {
                 reorderLevel: m.reorderLevel
             }));
             setRawMaterials(mappedData);
-            isLoaded.current.rawMaterials = true;
         } catch (e) {
             console.error('Error loading raw materials:', e);
-            isLoaded.current.rawMaterials = true;
         } finally {
             isLoading.current.rawMaterials = false;
         }
     }, []);
 
     const loadPurchases = useCallback(async () => {
-        if (isLoaded.current.purchases || isLoading.current.purchases) return;
+        if (isLoading.current.purchases) return;
         isLoading.current.purchases = true;
         try {
             const res = await purchaseApi.getPurchases() || {};
@@ -324,25 +385,21 @@ export function StoreProvider({ children }) {
                 mappedPurchases.push({ ...pu, items });
             }
             setPurchases(mappedPurchases);
-            isLoaded.current.purchases = true;
         } catch (e) {
             console.error('Error loading purchases:', e);
-            isLoaded.current.purchases = true;
         } finally {
             isLoading.current.purchases = false;
         }
     }, []);
 
     const loadTransactions = useCallback(async () => {
-        if (isLoaded.current.transactions || isLoading.current.transactions) return;
+        if (isLoading.current.transactions) return;
         isLoading.current.transactions = true;
         try {
             const res = await accountApi.getTransactions() || {};
             setTransactions(res.items || []);
-            isLoaded.current.transactions = true;
         } catch (e) {
             console.error('Error loading transactions:', e);
-            isLoaded.current.transactions = true;
         } finally {
             isLoading.current.transactions = false;
         }
@@ -465,10 +522,6 @@ export function StoreProvider({ children }) {
             dateTo: '',
             currentPage: 1
         });
-        isLoaded.current = {
-            products: false, customers: false, orders: false,
-            suppliers: false, rawMaterials: false, purchases: false, transactions: false
-        };
         isLoading.current = {
             products: false, customers: false, orders: false,
             suppliers: false, rawMaterials: false, purchases: false, transactions: false
@@ -674,7 +727,7 @@ export function StoreProvider({ children }) {
             toggleBatchStatus,
             addCustomer, addAddress, addSupplier,
             loadProducts, loadCustomers, searchCustomers, loadOrders, loadOrderItems, loadSuppliers, searchSuppliers,
-            loadRawMaterials, searchRawMaterials, loadPurchases, loadTransactions, loadProductionRequests, isLoaded, isLoading
+            loadRawMaterials, searchRawMaterials, loadPurchases, loadTransactions, loadProductionRequests, isLoading
         }}>
             {children}
         </StoreContext.Provider>
@@ -685,4 +738,3 @@ export function useStore() {
     const context = useContext(StoreContext);
     return context || {};
 }
-

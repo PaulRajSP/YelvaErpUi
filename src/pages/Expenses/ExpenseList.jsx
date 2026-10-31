@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { 
     IndianRupee, Plus, Search, Calendar, FileText, 
-    Trash2, Edit2, Eye, Clock, AlertCircle, Zap, X, RefreshCw, Paperclip
+    Trash2, Edit2, Clock, AlertCircle, Zap, X, RefreshCw, Paperclip
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import Dropdown from '../../components/common/Dropdown';
@@ -14,9 +14,10 @@ import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import ExpenseReceiptModal from '../../components/expenses/ExpenseReceiptModal';
+import UploadedDocumentButton from '../../components/common/UploadedDocumentButton';
 import { expenseApi } from '../../api/expenseApi';
 import { commonApi } from '../../api/commonApi';
-import { formatCurrency, formatDate, formatDateTime } from '../../common/utils';
+import { formatCurrency, formatDate } from '../../common/utils';
 
 export default function ExpenseList() {
     const { currentUser } = useStore();
@@ -368,15 +369,16 @@ export default function ExpenseList() {
             <PageHeader
                 title="Expense Management"
                 subtitle="Track and audit external operational expenses (Electricity, Rent, Utilities, Maintenance, etc.)"
-            >
-                <Button
-                    variant="primary"
-                    onClick={handleOpenCreate}
-                    icon={Plus}
-                >
-                    Record Expense
-                </Button>
-            </PageHeader>
+                rightContent={
+                    <Button
+                        variant="primary"
+                        onClick={handleOpenCreate}
+                        icon={Plus}
+                    >
+                        Add Expense
+                    </Button>
+                }
+            />
 
             {/* TOP METRIC CARDS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -838,7 +840,10 @@ export default function ExpenseList() {
                             {formData.attachmentData.map((attachment, index) => (
                                 <div key={attachment.attachmentEdid} className="flex items-center justify-between gap-2 px-3 py-2 mt-2 bg-white border border-slate-200 rounded-lg text-xs">
                                     <span className="truncate text-slate-700">{attachment.attachmentOriginalName}</span>
-                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, attachmentData: prev.attachmentData.filter((_, i) => i !== index) }))} className="text-red-500 hover:text-red-700 font-semibold">Remove</button>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <UploadedDocumentButton attachment={attachment} />
+                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, attachmentData: prev.attachmentData.filter((_, i) => i !== index) }))} className="text-red-500 hover:text-red-700 font-semibold">Remove</button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

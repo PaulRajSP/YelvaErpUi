@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Plus, Trash2, Paperclip, FileText, UploadCloud, Calendar, Building2, Package, CheckCircle, Clock, ArrowLeft, Save, Info, Check } from "lucide-react";
+import { X, Plus, Trash2, FileText, UploadCloud, Building2, Package, ArrowLeft, Save, Info, Check } from "lucide-react";
 import PageHeader from "../../components/common/PageHeader";
 import { Button } from "../../components/ui/Button";
 import Dropdown from "../../components/common/Dropdown";
 import DatePicker from "../../components/common/DatePicker";
 import BatchSelector from "../../components/common/BatchSelector";
+import UploadedDocumentButton from "../../components/common/UploadedDocumentButton";
 import { useStore } from "../../context/StoreContext";
 import { purchaseApi } from "../../api/purchaseApi";
 import { commonApi } from "../../api/commonApi";
@@ -230,15 +231,9 @@ export default function NewPurchase() {
     const [formData, setFormData] = useState({
         supplierId: "",
         date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split("T")[0],
-        status: "PAID",
-        amountPaid: "",
-        initialPaymentMethod: "Cash",
-        initialPaymentReference: "",
-        initialPaymentRemark: "",
         items: [{ materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }]
     });
     const [billAttachments, setBillAttachments] = useState([]);
-    const [initialPaymentAttachments, setInitialPaymentAttachments] = useState([]);
 
     const [addingMaterialIndex, setAddingMaterialIndex] = useState(null);
     const [newMaterialForm, setNewMaterialForm] = useState({ name: "", category: "", unitEdid: "", minQuantity: 0, reorderLevel: 0 });
@@ -263,18 +258,6 @@ export default function NewPurchase() {
         }
         e.target.value = "";
     };
-
-    const handleInitialPaymentUpload = (e) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length) {
-            setInitialPaymentAttachments(prev => [
-                ...prev,
-                ...files.map(file => ({ file, name: file.name, size: file.size }))
-            ]);
-        }
-        e.target.value = "";
-    };
-
 
     const handleAddItem = () =>
         setFormData(prev => ({ ...prev, items: [...prev.items, { materialId: "", qty: "", unit: "", rate: "", batchEdid: "" }] }));
@@ -387,21 +370,11 @@ export default function NewPurchase() {
 
     const handleSubmit = async () => {
         if (!formData.supplierId) return alert("Select a supplier!");
-        const hasMissingBatches = formData.items.some(i => i.materialId && !i.batchEdid);
-        if (hasMissingBatches) return alert("Please select a Batch for all items!");
-        const validItems = formData.items.filter(i => i.materialId && i.batchEdid && parseFloat(i.qty) > 0 && parseFloat(i.rate) > 0);
+        const validItems = formData.items.filter(i => i.materialId && parseFloat(i.qty) > 0 && parseFloat(i.rate) > 0);
         if (validItems.length === 0) return alert("Add at least one valid item!");
 
         const total = calculateTotal();
-        const amountPaid = parseFloat(formData.amountPaid) || 0;
-
-        if (amountPaid > 0 && formData.initialPaymentMethod !== 'Cash') {
-            if (!formData.initialPaymentReference.trim()) return alert('Payment reference is required for this payment method.');
-            if (initialPaymentAttachments.length === 0) return alert('Attach payment proof for this payment method.');
-        }
-
         let attachmentData = [];
-        let initialPaymentAttachmentData = [];
         if (billAttachments.length > 0) {
             try {
                 attachmentData = (await Promise.all(billAttachments.map(async attachment => {
@@ -422,32 +395,12 @@ export default function NewPurchase() {
             }
         }
 
-        if (amountPaid > 0 && initialPaymentAttachments.length > 0) {
-            try {
-                initialPaymentAttachmentData = (await Promise.all(initialPaymentAttachments.map(async attachment => {
-                    const uploadRes = await commonApi.uploadAttachment(attachment.file);
-                    const data = uploadRes?.data || uploadRes;
-                    const attachmentEdid = data?.attachmentEdid || data?.documentEdid || data?.edid;
-                    if (!attachmentEdid) return null;
-                    return { attachmentEdid, attachmentType: 'Receipt', remarks: '' };
-                }))).filter(Boolean);
-            } catch (err) {
-                console.error('Failed to upload initial payment proof', err);
-                alert('Failed to upload payment proof: ' + (err.message || 'Unknown error'));
-                return;
-            }
-        }
-
         const reqPayload = {
             purchase: {
                 supplierEdid: formData.supplierId,
                 date: new Date(formData.date).toISOString(),
                 totalAmount: total,
-                paidAmount: amountPaid,
-                initialPaymentMethod: formData.initialPaymentMethod,
-                initialPaymentReference: formData.initialPaymentReference.trim() || null,
-                initialPaymentRemark: formData.initialPaymentRemark.trim() || null,
-                initialPaymentAttachmentData,
+                paidAmount: 0,
                 attachmentData: attachmentData
             },
             items: validItems.map(item => ({
@@ -455,20 +408,14 @@ export default function NewPurchase() {
                 qty: parseFloat(item.qty),
                 rate: parseFloat(item.rate),
                 total: parseFloat(item.qty) * parseFloat(item.rate),
-                batchEdid: item.batchEdid
+                batchEdid: item.batchEdid || ""
             }))
         };
 
         try {
             const apiRes = await purchaseApi.createPurchase(reqPayload);
-            if (apiRes && apiRes.success !== false) {
-                // Success! Let's refresh store data or simply navigate
-                // Optionally call loadPurchases() or loadBatches() if exposed from context, 
-                // but since we're navigating back, we can just let the list component fetch if needed.
-                navigate("/purchases");
-            } else {
-                alert(apiRes?.message || "Failed to create purchase");
-            }
+            if (!apiRes?.edid) throw new Error("Purchase was created without a purchase ID.");
+            navigate(`/purchases/${apiRes.edid}`);
         } catch (err) {
             console.error("Failed to create purchase", err);
             alert("Error creating purchase: " + err.message);
@@ -504,7 +451,11 @@ export default function NewPurchase() {
                         <p className="text-xs text-slate-500 mb-4">Select the supplier for this purchase.</p>
                         <Dropdown
                             value={formData.supplierId}
-                            onChange={v => setFormData(p => ({ ...p, supplierId: v }))}
+                            onChange={v => setFormData(p => ({
+                                ...p,
+                                supplierId: v,
+                                items: p.items.map(item => ({ ...item, batchEdid: "" }))
+                            }))}
                             options={supplierOptions}
                             searchable
                             onSearchChange={handleSupplierSearch}
@@ -530,80 +481,6 @@ export default function NewPurchase() {
                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</label>
                             <DatePicker value={formData.date} onChange={v => setFormData(p => ({ ...p, date: v }))} className="w-full" />
                         </div>
-                        {(() => {
-                            const pendingAmount = totalAmount - (parseFloat(formData.amountPaid) || 0);
-                            const isOwed = pendingAmount > 0;
-                            const isOverpaid = pendingAmount < 0;
-                            const isSettled = pendingAmount === 0;
-
-                            return (
-                                <div className="space-y-3 pt-2">
-                                    <div className="space-y-1.5">
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amount Paid (₹)</label>
-                                        <input
-                                            type="number" min="0" step="0.01"
-                                            value={formData.amountPaid}
-                                            onChange={e => setFormData(p => ({ ...p, amountPaid: e.target.value }))}
-                                            className={`w-full border-2 rounded-lg px-3 py-2 text-sm focus:outline-none font-bold transition-colors ${isSettled ? "border-emerald-200 focus:border-emerald-400 bg-emerald-50/50 text-emerald-900" :
-                                                "border-slate-200 focus:border-indigo-400 bg-white text-slate-900"
-                                                }`}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    {parseFloat(formData.amountPaid) > 0 && (
-                                        <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
-                                            <Dropdown
-                                                label="Payment Method"
-                                                value={formData.initialPaymentMethod}
-                                                options={['Cash', 'UPI', 'BankTransfer', 'Card', 'Cheque']}
-                                                onChange={value => setFormData(p => ({ ...p, initialPaymentMethod: value }))}
-                                                className="w-full"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={formData.initialPaymentReference}
-                                                onChange={e => setFormData(p => ({ ...p, initialPaymentReference: e.target.value }))}
-                                                placeholder="Transaction / cheque reference (optional)"
-                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={formData.initialPaymentRemark}
-                                                onChange={e => setFormData(p => ({ ...p, initialPaymentRemark: e.target.value }))}
-                                                placeholder="Payment remark (optional)"
-                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
-                                            />
-                                            {initialPaymentAttachments.map((attachment, index) => (
-                                                <div key={`${attachment.name}-${index}`} className="flex items-center justify-between gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
-                                                    <span className="text-xs font-semibold text-slate-700 truncate">{attachment.name}</span>
-                                                    <button type="button" onClick={() => setInitialPaymentAttachments(prev => prev.filter((_, i) => i !== index))} className="p-1 text-slate-400 hover:text-rose-600" title="Remove payment proof"><Trash2 size={14} /></button>
-                                                </div>
-                                            ))}
-                                            <label className="flex items-center justify-center gap-2 p-2.5 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
-                                                <input type="file" multiple accept="image/*,.pdf" onChange={handleInitialPaymentUpload} className="hidden" />
-                                                <UploadCloud size={14} className="text-slate-500" />
-                                                <span className="text-xs font-semibold text-slate-600">Attach payment proof</span>
-                                            </label>
-                                        </div>
-                                    )}
-                                    <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${isOwed ? "bg-red-50 border-red-100" :
-                                        isOverpaid ? "bg-amber-50 border-amber-100" :
-                                            "bg-emerald-50 border-emerald-100"
-                                        }`}>
-                                        <span className={`text-xs font-bold ${isOwed ? "text-red-600" :
-                                            isOverpaid ? "text-amber-600" :
-                                                "text-emerald-600"
-                                            }`}>{isOverpaid ? "Overpaid Amount" : "Pending Amount"}</span>
-                                        <span className={`text-sm font-black ${isOwed ? "text-red-700" :
-                                            isOverpaid ? "text-amber-700" :
-                                                "text-emerald-700"
-                                            }`}>
-                                            ₹{Math.abs(pendingAmount).toFixed(2)}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })()}
                     </div>
 
                     {/* Bill Attachment (Moved from right column) */}
@@ -625,7 +502,10 @@ export default function NewPurchase() {
                                                 <p className="text-[10px] text-slate-400">{(attachment.size / 1024).toFixed(0)}KB</p>
                                             </div>
                                         </div>
-                                        <button type="button" onClick={() => setBillAttachments(prev => prev.filter((_, i) => i !== index))} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Remove attachment"><Trash2 size={14} /></button>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <UploadedDocumentButton attachment={attachment} />
+                                            <button type="button" onClick={() => setBillAttachments(prev => prev.filter((_, i) => i !== index))} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Remove attachment"><Trash2 size={14} /></button>
+                                        </div>
                                     </div>
                                     <input type="text" placeholder="Remark (optional)" value={attachment.remark} onChange={e => setBillAttachments(prev => prev.map((item, i) => i === index ? { ...item, remark: e.target.value } : item))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
                                 </div>
@@ -711,7 +591,7 @@ export default function NewPurchase() {
                                             onChange={v => {
                                                 const selectedMat = materialsMapRef.current.get(v) || materialOptions.find(o => o.value === v);
                                                 const unitSymbol = selectedMat?.allowedUnitSymbol || selectedMat?.unitSymbol || "";
-                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol });
+                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol, batchEdid: "" });
                                             }}
                                             options={getRowMaterialOptions(item.materialId)}
                                             placeholder="-- Select Material --"
@@ -733,13 +613,16 @@ export default function NewPurchase() {
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <input type="number" step="0.01" min="0" value={item.rate} onChange={e => updateItem(index, "rate", e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0.00" />
+                                        <input type="number" step="0.01" min="0" value={item.rate} onChange={e => updateItemMultiple(index, { rate: e.target.value, batchEdid: "" })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0.00" />
                                     </div>
                                     <div className="col-span-2 flex items-center gap-2">
                                         <div className="w-full">
                                             <BatchSelector
                                                 materialEdid={item.materialId}
+                                                supplierEdid={formData.supplierId}
+                                                unitCost={item.rate}
                                                 value={item.batchEdid}
+                                                disabled={!formData.supplierId || !item.materialId || parseFloat(item.rate) <= 0}
                                                 label=""
                                                 onChange={(batch) => {
                                                     if (batch) {

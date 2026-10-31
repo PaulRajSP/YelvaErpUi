@@ -16,7 +16,9 @@ import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
 import { formatDate, PAGE_SIZE } from '../../common/utils';
 import Dropdown from '../../components/common/Dropdown';
+import DatePicker from '../../components/common/DatePicker';
 import DocumentViewModal from '../../components/common/DocumentViewModal';
+import UploadedDocumentButton from '../../components/common/UploadedDocumentButton';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 const STATUS_CONFIG = {
@@ -666,8 +668,7 @@ export default function PurchaseDetails() {
                         <Dropdown label="Payment Type" value={paymentType} options={paymentTypeOptions} onChange={setPaymentType} className="w-full" disabled={isPaying} />
                         <Dropdown label="Payment Status" value={paymentStatus} options={paymentStatusOptions} onChange={setPaymentStatus} className="w-full" disabled={isPaying} />
                         <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Payment Date</label>
-                            <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} disabled={isPaying} className="w-full h-10 px-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-400" />
+                            <DatePicker label="Payment Date" value={paymentDate} onChange={setPaymentDate} disabled={isPaying} className="w-full" />
                         </div>
                     </div>
                     <div className="space-y-3">
@@ -690,7 +691,10 @@ export default function PurchaseDetails() {
                             {paymentAttachments.map((attachment, index) => (
                                 <div key={attachment.attachmentEdid} className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
                                     <span className="text-xs font-semibold text-slate-700 truncate">{attachment.attachmentOriginalName}</span>
-                                    <button type="button" onClick={() => setPaymentAttachments(prev => prev.filter((_, i) => i !== index))} disabled={isPaying} className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-40" title="Remove receipt"><X size={14} /></button>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <UploadedDocumentButton attachment={attachment} />
+                                        <button type="button" onClick={() => setPaymentAttachments(prev => prev.filter((_, i) => i !== index))} disabled={isPaying} className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-40" title="Remove receipt"><X size={14} /></button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

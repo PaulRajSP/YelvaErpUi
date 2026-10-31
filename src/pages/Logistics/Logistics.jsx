@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
     Truck, Search, Package, MapPin, User, Calendar, CheckCircle, ArrowRight,
-    Upload, FileText, X, Loader2, Eye, Download, DollarSign, Filter, ChevronLeft, ChevronRight, RefreshCw
+    Upload, X, Loader2, Eye, Download, DollarSign, Filter, ChevronLeft, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { orderApi } from '../../api/orderApi';
 import { commonApi } from '../../api/commonApi';
@@ -17,6 +17,7 @@ import { Tooltip } from '../../components/ui/Tooltip';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
+import UploadedDocumentButton from '../../components/common/UploadedDocumentButton';
 
 export default function Logistics() {
     const navigate = useNavigate();
@@ -518,10 +519,12 @@ export default function Logistics() {
                                 {slipAttachments.map((attachment, index) => (
                                     <div key={attachment.attachmentEdid} className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs mb-2">
                                         <div className="flex items-center gap-2 text-blue-900 font-semibold truncate">
-                                            <FileText size={16} className="text-blue-600 shrink-0" />
                                             <span className="truncate">{attachment.attachmentOriginalName}</span>
                                         </div>
-                                        <button type="button" onClick={() => setSlipAttachments(prev => prev.filter((_, i) => i !== index))} className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer">Remove</button>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <UploadedDocumentButton attachment={attachment} className="p-1 text-blue-700 hover:bg-blue-100 rounded-lg" />
+                                            <button type="button" onClick={() => setSlipAttachments(prev => prev.filter((_, i) => i !== index))} className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer">Remove</button>
+                                        </div>
                                     </div>
                                 ))}
                                 {

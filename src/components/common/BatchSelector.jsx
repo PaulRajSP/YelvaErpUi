@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Plus, Package, Loader2 } from 'lucide-react';
+import { ChevronDown, Package, Loader2 } from 'lucide-react';
 import { purchaseApi } from '../../api/purchaseApi';
 
-export default function BatchSelector({ materialEdid, value, onChange, label = "BATCH # (OPTIONAL)", disabled = false, allowAutoGenerate = true }) {
+export default function BatchSelector({ materialEdid, supplierEdid, unitCost, value, onChange, label = "BATCH #", disabled = false }) {
     const [isOpen, setIsOpen] = useState(false);
     const [batches, setBatches] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [selectedBatch, setSelectedBatch] = useState(null);
-    const [creating, setCreating] = useState(false);
-
     const wrapperRef = useRef(null);
+    const requestIdRef = useRef(0);
 
-    // Initialize selected batch from value
     useEffect(() => {
-        if (value && !selectedBatch) {
-            // For now, if value is provided but selectedBatch is empty, we fetch it
-            purchaseApi.getBatchById(value).then(res => {
-                if (res?.data) {
-                    setSelectedBatch(res.data);
-                }
-            }).catch(console.error);
-        } else if (!value) {
-            setSelectedBatch(null);
-        }
-    }, [value]);
+        if (!value || selectedBatch?.edid === value) return undefined;
+
+        let active = true;
+        purchaseApi.getBatchById(value).then(res => {
+            const batch = res?.data || res;
+            if (active && batch?.edid === value) setSelectedBatch(batch);
+        }).catch(console.error);
+
+        return () => {
+            active = false;
+        };
+    }, [value, selectedBatch?.edid]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -37,77 +36,31 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchBatches = async (searchTerm = '') => {
-        if (!materialEdid) return;
-        setLoading(true);
-        try {
-            const res = await purchaseApi.getBatchesForMaterial(materialEdid, searchTerm);
-            if (res?.data?.items) {
-                setBatches(res.data.items);
-            } else if (res?.items) {
-                setBatches(res.items);
-            }
-        } catch (error) {
-            console.error('Error fetching batches:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Debounced search
     useEffect(() => {
-        if (!isOpen) return;
+        const cost = Number(unitCost);
+        if (!materialEdid || !Number.isFinite(cost) || cost <= 0) return undefined;
 
-        const timer = setTimeout(() => {
-            fetchBatches(search);
+        const requestId = ++requestIdRef.current;
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const res = await purchaseApi.getBatchesForMaterial(materialEdid, isOpen ? search : '', cost, supplierEdid);
+                if (requestId === requestIdRef.current) {
+                    setBatches(res?.data?.items || res?.items || []);
+                }
+            } catch (error) {
+                console.error('Error fetching batches:', error);
+                if (requestId === requestIdRef.current) setBatches([]);
+            } finally {
+                if (requestId === requestIdRef.current) setLoading(false);
+            }
         }, 300);
 
-        return () => clearTimeout(timer);
-    }, [search, isOpen, materialEdid]);
-
-    const handleCreateBatch = async () => {
-        if (!materialEdid) return;
-        setCreating(true);
-        try {
-            const res = await purchaseApi.createBatch(materialEdid);
-            // apiClient unwraps the success envelope, so res IS the data object
-            if (res && (res.batchNumber || res.batchEdid || res.edid)) {
-                const newBatchNumber = res.batchNumber;
-
-                // Hit the API to fetch the updated list containing this specific batch
-                try {
-                    const listRes = await purchaseApi.getBatchesForMaterial(materialEdid, newBatchNumber);
-                    let batchToSelect = null;
-                    if (listRes?.items && listRes.items.length > 0) {
-                        batchToSelect = listRes.items[0];
-                    }
-
-                    if (batchToSelect) {
-                        handleSelect(batchToSelect);
-                    } else {
-                        // Fallback if not found in list API immediately
-                        handleSelect({
-                            edid: res.batchEdid || res.edid,
-                            batchNumber: newBatchNumber,
-                            qtyRemaining: 0,
-                            qtyPurchased: 0
-                        });
-                    }
-                } catch (e) {
-                    handleSelect({
-                        edid: res.batchEdid || res.edid,
-                        batchNumber: newBatchNumber,
-                        qtyRemaining: 0,
-                        qtyPurchased: 0
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error creating batch:', error);
-        } finally {
-            setCreating(false);
-        }
-    };
+        return () => {
+            clearTimeout(timer);
+            requestIdRef.current += 1;
+        };
+    }, [search, isOpen, materialEdid, supplierEdid, unitCost]);
 
     const handleSelect = (batch) => {
         setSelectedBatch(batch);
@@ -118,7 +71,12 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
         }
     };
 
-    const isActuallyDisabled = disabled || !materialEdid;
+    const isActuallyDisabled = disabled || !materialEdid || !Number.isFinite(Number(unitCost)) || Number(unitCost) <= 0;
+
+    // Trust the API: render exactly what it returned. The ±0.10 unit-cost
+    // tolerance is business logic that lives in the SQL predicate, not here.
+    const visibleBatches = batches;
+    const visibleSelectedBatch = selectedBatch?.edid === value ? selectedBatch : null;
 
     return (
         <div className="flex flex-col gap-1 relative" ref={wrapperRef}>
@@ -132,8 +90,8 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
                     } ${isActuallyDisabled ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'cursor-pointer'}`}
                 onClick={() => {
                     if (!isActuallyDisabled) {
-                        if (selectedBatch) {
-                            setSearch(selectedBatch.batchNumber);
+                        if (visibleSelectedBatch) {
+                            setSearch(visibleSelectedBatch.batchNumber);
                         }
                         setIsOpen(true);
                     }
@@ -145,13 +103,13 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
                 <div
                     className="w-full py-2.5 px-3 text-sm font-semibold text-slate-900 bg-transparent outline-none flex items-center min-h-[40px]"
                 >
-                    {selectedBatch ? (
-                        <span>{selectedBatch.batchNumber}</span>
+                    {visibleSelectedBatch ? (
+                        <span>{visibleSelectedBatch.batchNumber}</span>
                     ) : (
-                        <span className="text-slate-400 font-normal">e.g. 647788</span>
+                        <span className="text-slate-400 font-normal">{isActuallyDisabled ? "Enter unit rate first" : "Select batch"}</span>
                     )}
                 </div>
-                {selectedBatch && !isActuallyDisabled && (
+                {visibleSelectedBatch && !isActuallyDisabled && (
                     <button
                         type="button"
                         className="flex items-center justify-center p-1 text-slate-400 hover:text-slate-600 transition-colors"
@@ -174,7 +132,7 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
             </div>
 
             {/* Dropdown Menu */}
-            {isOpen && materialEdid && !disabled && (
+            {isOpen && !isActuallyDisabled && (
                 <div className="absolute top-[100%] right-0 w-[260px] mt-1 bg-white border border-slate-200 rounded-lg shadow-lg shadow-slate-200/50 z-[100] overflow-hidden flex flex-col">
                     {/* Search Bar */}
                     <div className="p-2 border-b border-slate-100 bg-white">
@@ -189,54 +147,41 @@ export default function BatchSelector({ materialEdid, value, onChange, label = "
                     </div>
 
                     {/* Header Row */}
-                    <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        <span>Batch Number</span>
-                        <span>Qty Remaining</span>
+                    <div className="flex items-center px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="flex-1">Batch</span>
+                        <span className="w-14 text-right">Cost</span>
+                        <span className="w-14 text-right">Qty</span>
                     </div>
 
                     {/* Batch List */}
                     <div className="max-h-60 overflow-y-auto">
-                        {batches.length > 0 ? (
+                        {visibleBatches.length > 0 ? (
                             <div className="divide-y divide-slate-50">
-                                {batches.map((batch) => (
+                                {visibleBatches.map((batch) => (
                                     <div
                                         key={batch.edid}
-                                        className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
+                                        className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
                                         onClick={() => handleSelect(batch)}
                                     >
-                                        <div className="font-bold text-sm text-slate-700">
+                                        <div className="flex-1 font-bold text-sm text-slate-700 truncate">
                                             {batch.batchNumber}
                                         </div>
-                                        <div className="text-sm font-medium text-slate-500">
+                                        <div className="w-14 text-right text-sm font-medium text-slate-600">
+                                            {Number(batch.unitCost).toFixed(2)}
+                                        </div>
+                                        <div className="w-14 text-right text-sm font-medium text-slate-500">
                                             {batch.qtyRemaining}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="px-4 py-6 text-center text-sm text-slate-500">
+                            <div className="px-3 py-5 text-center text-sm text-slate-500">
                                 {loading ? 'Searching...' : 'No matching batches found.'}
                             </div>
                         )}
                     </div>
 
-                    {/* Create New Batch Button */}
-                    {allowAutoGenerate && (
-                        <div className="p-2 bg-slate-50 border-t border-slate-100">
-                            <button
-                                type="button"
-                                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-md bg-indigo-50 text-indigo-600 font-bold text-sm hover:bg-indigo-100 transition-colors disabled:opacity-50"
-                                onClick={handleCreateBatch}
-                                disabled={creating}
-                            >
-                                {creating ? (
-                                    <><Loader2 size={16} className="animate-spin" /> Creating...</>
-                                ) : (
-                                    <><Plus size={16} strokeWidth={3} /> Auto-generate new batch</>
-                                )}
-                            </button>
-                        </div>
-                    )}
                 </div>
             )}
         </div>

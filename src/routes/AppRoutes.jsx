@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { PermissionEnum } from '../common/permissions';
@@ -75,6 +76,14 @@ function IndexRoute() {
 }
 
 export default function AppRoutes() {
+    const [, refreshCachedViews] = useState(0);
+
+    useEffect(() => {
+        const handleCacheUpdate = () => refreshCachedViews(version => version + 1);
+        window.addEventListener('api:cache-updated', handleCacheUpdate);
+        return () => window.removeEventListener('api:cache-updated', handleCacheUpdate);
+    }, []);
+
     return (
         <Routes>
             <Route path="/login" element={<Login />} />

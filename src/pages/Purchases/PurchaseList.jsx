@@ -224,14 +224,12 @@ export default function Purchases() {
           {/* Filters & Actions for Invoices */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
             <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative bg-white border border-slate-200 rounded-lg overflow-hidden h-10 w-[140px] flex items-center">
-                <span className="pl-3 pr-1 text-slate-400 font-semibold text-sm shrink-0">PUR-</span>
-
+              <div className="relative bg-white border border-slate-200 rounded-lg overflow-hidden h-10 w-28 flex items-center">
                 <input
                   type="text"
                   autoComplete="off"
                   placeholder="1001"
-                  className="w-full h-full px-1 outline-none text-sm font-semibold text-slate-900 placeholder:text-slate-400"
+                  className="w-full h-full px-3 outline-none text-sm font-semibold text-slate-900 placeholder:text-slate-400"
                   value={publicIdSearch}
                   onChange={e => {
                     setPublicIdSearch(e.target.value);

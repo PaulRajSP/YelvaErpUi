@@ -123,9 +123,17 @@ export default function DocumentViewModal({
                 setResolvedFileName(finalName);
                 setLoading(false);
             } catch (err) {
-                console.error('Failed to preview document:', err);
                 if (isMounted) {
-                    setError(true);
+                    const isImageFile = /\.(png|jpe?g|gif|webp|svg|bmp)(?:[?#]|$)/i.test(fileName || url);
+                    if (isImageFile) {
+                        console.warn('Could not fetch image preview as a blob; using the direct image URL:', err);
+                        setBlobUrl(url);
+                        setFileType('image');
+                        setError(false);
+                    } else {
+                        console.error('Failed to preview document:', err);
+                        setError(true);
+                    }
                     setLoading(false);
                 }
             }

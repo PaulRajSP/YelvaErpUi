@@ -7,6 +7,7 @@ import Dropdown from '../../components/common/Dropdown';
 import SuccessModal from '../../components/common/SuccessModal';
 import indianStates from '../../data/indianStates.json';
 import SearchableSelect from '../../components/common/SearchableSelect';
+import UploadedDocumentButton from '../../components/common/UploadedDocumentButton';
 import { customerApi } from '../../api/customerApi';
 import { productApi } from '../../api/productApi';
 import { commonApi } from '../../api/commonApi';
@@ -1258,16 +1259,22 @@ export default function NewOrder() {
                                                 {paymentAttachmentEdid ? (
                                                     <div className="flex items-center justify-between p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center gap-2 text-amber-900 font-semibold truncate">
-                                                            <FileText size={15} className="text-amber-600 shrink-0" />
                                                             <span className="truncate">{paymentDocFileName || 'Payment Proof Attached'}</span>
                                                         </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); setPaymentAttachmentEdid(null); setPaymentDocFileName(''); }}
-                                                            className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer transition-colors"
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <UploadedDocumentButton
+                                                                attachment={{ attachmentEdid: paymentAttachmentEdid, attachmentOriginalName: paymentDocFileName }}
+                                                                className="p-1 text-amber-700 hover:bg-amber-100 rounded-lg"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setPaymentAttachmentEdid(null); setPaymentDocFileName(''); }}
+                                                                className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer transition-colors"
+                                                                title="Remove document"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <label

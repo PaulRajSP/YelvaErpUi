@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import Dropdown from "../../components/common/Dropdown";
 import DatePicker from "../../components/common/DatePicker";
 import BatchSelector from "../../components/common/BatchSelector";
+import UploadedDocumentButton from "../../components/common/UploadedDocumentButton";
 import { useStore } from "../../context/StoreContext";
 import { purchaseApi } from "../../api/purchaseApi";
 
@@ -451,7 +452,11 @@ export default function EditPurchase() {
                         <p className="text-xs text-slate-500 mb-4">Select the supplier for this purchase.</p>
                         <Dropdown
                             value={formData.supplierId}
-                            onChange={v => setFormData(p => ({ ...p, supplierId: v }))}
+                            onChange={v => setFormData(p => ({
+                                ...p,
+                                supplierId: v,
+                                items: p.items.map(item => ({ ...item, batchEdid: "" }))
+                            }))}
                             options={supplierOptions}
                             searchable
                             onSearchChange={handleSupplierSearch}
@@ -624,7 +629,7 @@ export default function EditPurchase() {
                                             onChange={v => {
                                                 const selectedMat = materialsMapRef.current.get(v) || materialOptions.find(o => o.value === v);
                                                 const unitSymbol = selectedMat?.allowedUnitSymbol || selectedMat?.unitSymbol || "";
-                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol });
+                                                updateItemMultiple(index, { materialId: v, unit: unitSymbol, batchEdid: "" });
                                             }}
                                             options={getRowMaterialOptions(item.materialId)}
                                             placeholder="-- Select Material --"
@@ -646,13 +651,16 @@ export default function EditPurchase() {
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <input type="number" step="0.01" min="0" value={item.rate} onChange={e => updateItem(index, "rate", e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0.00" />
+                                        <input type="number" step="0.01" min="0" value={item.rate} onChange={e => updateItemMultiple(index, { rate: e.target.value, batchEdid: "" })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" placeholder="0.00" />
                                     </div>
                                     <div className="col-span-2 flex items-center gap-2">
                                         <div className="w-full">
                                             <BatchSelector
                                                 materialEdid={item.materialId}
+                                                supplierEdid={formData.supplierId}
+                                                unitCost={item.rate}
                                                 value={item.batchEdid}
+                                                disabled={!formData.supplierId || !item.materialId || parseFloat(item.rate) <= 0}
                                                 label=""
                                                 onChange={(batch) => {
                                                     if (batch) {
@@ -708,6 +716,7 @@ export default function EditPurchase() {
                                                 <div className="flex items-center gap-3 w-full bg-white border border-slate-200 py-1.5 px-3 rounded-lg overflow-hidden">
                                                     <FileText size={16} className="text-slate-400 shrink-0" />
                                                     <span className="text-xs font-bold text-slate-700 truncate">{att.name}</span>
+                                                    <UploadedDocumentButton attachment={att} className="ml-auto p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0" />
                                                 </div>
                                             )}
                                         </div>

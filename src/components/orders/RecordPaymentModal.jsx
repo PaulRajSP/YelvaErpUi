@@ -3,11 +3,10 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { orderApi } from '../../api/orderApi';
 import { commonApi } from '../../api/commonApi';
-import { API_BASE } from '../../services/apiClient';
-import { CreditCard, CheckCircle2, AlertCircle, Loader2, ArrowRight, Upload, FileText, X, Eye } from 'lucide-react';
+import { CreditCard, CheckCircle2, AlertCircle, Loader2, ArrowRight, Upload, X } from 'lucide-react';
 import Dropdown from '../common/Dropdown';
 import DatePicker from '../common/DatePicker';
-import DocumentViewModal from '../common/DocumentViewModal';
+import UploadedDocumentButton from '../common/UploadedDocumentButton';
 
 const PAYMENT_METHOD_OPTIONS = [
     { value: 'UPI', label: 'UPI / QR Code' },
@@ -48,10 +47,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
     const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [remark, setRemark] = useState('');
     const [attachmentData, setAttachmentData] = useState([]);
-    const attachmentEdid = attachmentData[0]?.attachmentEdid || null;
-    const docFileName = attachmentData[0]?.attachmentOriginalName || '';
     const [uploadingDoc, setUploadingDoc] = useState(false);
-    const [showViewModal, setShowViewModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -352,7 +348,7 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                             <div key={attachment.attachmentEdid} className="flex items-center justify-between gap-2 p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs">
                                 <span className="truncate text-amber-900 font-semibold">{attachment.attachmentOriginalName}</span>
                                 <div className="flex items-center gap-1 shrink-0">
-                                    {index === 0 && <button type="button" onClick={() => setShowViewModal(true)} className="p-1 text-amber-700 hover:bg-amber-100 rounded-lg" title="View Document"><FileText size={15} /></button>}
+                                <UploadedDocumentButton attachment={attachment} className="p-1 text-amber-700 hover:bg-amber-100 rounded-lg" />
                                     <button type="button" onClick={() => setAttachmentData(prev => prev.filter((_, i) => i !== index))} className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg" title="Remove Document"><X size={15} /></button>
                                 </div>
                             </div>
@@ -418,15 +414,6 @@ export default function RecordPaymentModal({ isOpen, onClose, order, onPaymentRe
                 </div>
             </form>
 
-            {attachmentEdid && (
-                <DocumentViewModal
-                    isOpen={showViewModal}
-                    onClose={() => setShowViewModal(false)}
-                    url={`${API_BASE}/common/attachment/${attachmentEdid}/${encodeURIComponent(docFileName || 'Payment_Proof')}`}
-                    title="Payment Proof Preview"
-                    fileName={docFileName}
-                />
-            )}
         </Modal>
     );
 }
