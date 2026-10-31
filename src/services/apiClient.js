@@ -59,10 +59,10 @@ function getCacheKey(method, endpoint, body) {
 }
 
 function isCacheableRead(method, endpoint) {
-    if (method === 'GET') return true;
+    const path = endpoint.split('?')[0];
+    if (method === 'GET') return path !== 'payment-transactions/balance';
     if (method !== 'POST') return false;
 
-    const path = endpoint.split('?')[0];
     return path.endsWith('/list') ||
         path.includes('customers/order') ||
         path === 'orders' ||

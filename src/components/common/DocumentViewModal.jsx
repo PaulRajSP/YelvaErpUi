@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X, ExternalLink, Download, FileText, Image as ImageIcon, Loader2, AlertCircle,
     ZoomIn, ZoomOut, RotateCw, Maximize2
@@ -175,9 +176,9 @@ export default function DocumentViewModal({
         document.body.removeChild(a);
     };
 
-    return (
+    return createPortal(
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
             onClick={onClose}
         >
             <div
@@ -401,6 +402,7 @@ export default function DocumentViewModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
