@@ -1,11 +1,10 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     Home, ShoppingCart, Users, Package, FileText, BarChart3, Bell,
     Truck, PackageOpen, Activity, Wallet, Box, Receipt, LogOut, ShieldCheck
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { PermissionEnum, hasPermission, hasRole } from '../../common/permissions';
-
 import { RoleEnum } from '../../common/roles';
 
 // Icon mapping for navigation links
@@ -31,6 +30,11 @@ const NAV_ICONS = {
 export default function Layout() {
     const { currentUser, userMenus = [], logout } = useStore();
     const navigate = useNavigate();
+    const location = useLocation();
+    const [showFirstLoadSkeleton, setShowFirstLoadSkeleton] = useState(false);
+    const loadingRequests = useRef(new Map());
+    const loadedRoutes = useRef(new Set());
+    const activePath = useRef(location.pathname);
 
     const userRoles = currentUser?.roles || (currentUser?.role ? [currentUser.role] : [RoleEnum.Staff]);
     const userInitial = (currentUser?.name || currentUser?.employeeCode || 'U').charAt(0).toUpperCase();
@@ -40,6 +44,44 @@ export default function Layout() {
         logout();
         navigate('/login');
     };
+
+    useLayoutEffect(() => {
+        activePath.current = location.pathname;
+        if (loadedRoutes.current.has(location.pathname)) {
+            setShowFirstLoadSkeleton(false);
+        }
+    }, [location.pathname]);
+
+    useLayoutEffect(() => {
+        const handleRequestStart = event => {
+            const requestPath = activePath.current;
+            loadingRequests.current.set(event.detail.requestId, requestPath);
+            if (!loadedRoutes.current.has(requestPath)) {
+                setShowFirstLoadSkeleton(true);
+            }
+        };
+
+        const handleRequestEnd = event => {
+            const requestPath = loadingRequests.current.get(event.detail.requestId);
+            loadingRequests.current.delete(event.detail.requestId);
+            if (!requestPath) return;
+
+            const hasPendingRequests = [...loadingRequests.current.values()].includes(requestPath);
+            if (!hasPendingRequests) {
+                loadedRoutes.current.add(requestPath);
+                if (activePath.current === requestPath) {
+                    setShowFirstLoadSkeleton(false);
+                }
+            }
+        };
+
+        window.addEventListener('api:request-start', handleRequestStart);
+        window.addEventListener('api:request-end', handleRequestEnd);
+        return () => {
+            window.removeEventListener('api:request-start', handleRequestStart);
+            window.removeEventListener('api:request-end', handleRequestEnd);
+        };
+    }, []);
 
     return (
         <div className="flex h-screen bg-[#f4f7f6] font-sans text-slate-800">
@@ -60,6 +102,8 @@ export default function Layout() {
                         userMenus.map((menu, index) => {
                             const IconComponent = NAV_ICONS[menu.frontendUrl] || Package;
                             const showHeader = menu.moduleName && (index === 0 || userMenus[index - 1]?.moduleName !== menu.moduleName);
+                            const isActive = location.pathname === menu.frontendUrl ||
+                                (menu.frontendUrl !== '/' && location.pathname.startsWith(`${menu.frontendUrl}/`));
 
                             return (
                                 <div key={menu.id || menu.frontendUrl || index}>
@@ -68,23 +112,18 @@ export default function Layout() {
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{menu.moduleName}</p>
                                         </div>
                                     )}
-                                    <NavLink
-                                        to={menu.frontendUrl}
-                                        end={menu.frontendUrl === '/'}
-                                        className={({ isActive }) =>
-                                            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${isActive
-                                                ? 'bg-slate-100 text-slate-900 border-l-4 border-slate-900'
-                                                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                                            }`
-                                        }
+                                    <button
+                                        type="button"
+                                        aria-current={isActive ? 'page' : undefined}
+                                        onClick={() => navigate(menu.frontendUrl)}
+                                        className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${isActive
+                                            ? 'bg-slate-100 text-slate-900 border-l-4 border-slate-900'
+                                            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
                                     >
-                                        {({ isActive }) => (
-                                            <>
-                                                <IconComponent size={17} strokeWidth={isActive ? 2.5 : 2} />
-                                                <span>{menu.menuName}</span>
-                                            </>
-                                        )}
-                                    </NavLink>
+                                        <IconComponent size={17} strokeWidth={isActive ? 2.5 : 2} />
+                                        <span>{menu.menuName}</span>
+                                    </button>
                                 </div>
                             );
                         })
@@ -157,9 +196,42 @@ export default function Layout() {
                 </header>
 
                 <div className="flex-1 overflow-y-auto no-scrollbar p-5 md:p-6 w-full mx-auto">
-                    <Outlet />
+                    <div className={showFirstLoadSkeleton ? 'hidden' : ''}>
+                        <Outlet />
+                    </div>
+                    {showFirstLoadSkeleton && <PageSkeleton />}
                 </div>
             </main>
+        </div>
+    );
+}
+
+function PageSkeleton() {
+    return (
+        <div aria-hidden="true" className="space-y-6 animate-pulse">
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-6 w-48 rounded bg-slate-200" />
+                    <div className="h-3 w-64 rounded bg-slate-100" />
+                </div>
+                <div className="h-9 w-28 rounded-lg bg-slate-200" />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }, (_, index) => (
+                    <div key={index} className="h-24 rounded-xl border border-slate-200 bg-white p-5">
+                        <div className="h-3 w-20 rounded bg-slate-100" />
+                        <div className="mt-4 h-6 w-24 rounded bg-slate-200" />
+                    </div>
+                ))}
+            </div>
+            <div className="h-72 rounded-xl border border-slate-200 bg-white p-5">
+                <div className="h-4 w-36 rounded bg-slate-200" />
+                <div className="mt-6 space-y-4">
+                    {Array.from({ length: 5 }, (_, index) => (
+                        <div key={index} className="h-8 rounded bg-slate-100" />
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }

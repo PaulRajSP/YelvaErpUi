@@ -8,14 +8,16 @@ export const courierApi = {
      * Request body:
      * {
      *   "onlyActive": true,
+     *   "isActive": true,
      *   "searchText": "",
      *   "paginationRequest": {
      *     "pageNumber": 1,
      *     "pageSize": 10
      *   }
      * }
+     * Omit isActive to use the legacy onlyActive behavior (false returns all couriers).
      */
-    getCouriers: async ({ onlyActive = true, searchText = '', pageNumber = 1, pageSize = 10 } = {}) => {
+    getCouriers: async ({ onlyActive = true, isActive, searchText = '', pageNumber = 1, pageSize = 10 } = {}) => {
         const payload = {
             onlyActive: Boolean(onlyActive),
             searchText: searchText ? String(searchText).trim() : '',
@@ -24,6 +26,7 @@ export const courierApi = {
                 pageSize: Number(pageSize) || 10
             },
         };
+        if (isActive !== undefined) payload.isActive = Boolean(isActive);
         return apiFetch('couriers/list', 'POST', payload);
     },
 

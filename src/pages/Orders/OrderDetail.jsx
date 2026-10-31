@@ -808,7 +808,7 @@ export default function OrderDetails() {
                     )}
 
                     {/* Bottom Section: Payment/Delivery (Col 1) and Comments & History (Col 2) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-5 items-start">
 
                         {/* Column 1: Payment & Delivery Cards */}
                         <div className="flex flex-col gap-4">
@@ -1241,7 +1241,7 @@ export default function OrderDetails() {
                                 {/* History Tab */}
                                 {activeBottomTab === 'history' && (
                                     <div className="flex flex-col">
-                                        <div className="divide-y divide-slate-100 overflow-y-auto max-h-[420px]">
+                                        <div className="divide-y divide-slate-100 overflow-y-auto min-h-[520px] max-h-[600px]">
                                             {trackingLoading && (!trackingData || !trackingData.items?.length) ? (
                                                 <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
                                                     <Loader2 size={16} className="animate-spin text-amber-500" />

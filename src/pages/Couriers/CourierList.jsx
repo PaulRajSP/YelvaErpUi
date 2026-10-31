@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, Phone, Mail, FileText, Upload, Trash2,
-    RefreshCw, Loader2, X, Eye, Printer, AlertCircle,
+    RotateCcw, Loader2, X, Eye, Printer, AlertCircle,
     Edit2, Truck
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
@@ -120,13 +120,14 @@ export default function CourierList() {
     }, [debouncedSearch, statusFilter]);
 
     // ── Server-side fetch: POST /api/couriers/list ───────────────────────────
-    const fetchCouriers = useCallback(async ({ onlyActive, searchText, pageNumber }) => {
+    const fetchCouriers = useCallback(async ({ onlyActive, isActive, searchText, pageNumber }) => {
         const reqId = ++activeRequestId.current;
         setLoading(true);
         setError(null);
         try {
             const res = await courierApi.getCouriers({
                 onlyActive,
+                isActive,
                 searchText: searchText || '',
                 pageNumber,
                 pageSize: PAGE_SIZE,
@@ -149,6 +150,7 @@ export default function CourierList() {
     useEffect(() => {
         fetchCouriers({
             onlyActive: statusFilter === 'ACTIVE',
+            isActive: statusFilter === 'ACTIVE',
             searchText: debouncedSearch,
             pageNumber: currentPage,
         });
@@ -158,6 +160,7 @@ export default function CourierList() {
     const refetchCurrent = useCallback(() => {
         fetchCouriers({
             onlyActive: statusFilter === 'ACTIVE',
+            isActive: statusFilter === 'ACTIVE',
             searchText: debouncedSearch,
             pageNumber: currentPage,
         });
@@ -437,8 +440,6 @@ export default function CourierList() {
 
     // ── Pagination — totalCount & pages come from server ─────────────────────
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-    const hasActiveFilters = Boolean(searchTerm);
-
     const handleResetFilters = () => {
         setSearchTerm('');
         setDebouncedSearch('');
@@ -487,23 +488,13 @@ export default function CourierList() {
 
                 <button
                     type="button"
-                    onClick={refetchCurrent}
+                    onClick={handleResetFilters}
                     className="h-10 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                    title="Refresh"
+                    title="Reset Filters"
+                    aria-label="Reset Filters"
                 >
-                    <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                    <RotateCcw size={15} />
                 </button>
-
-                {hasActiveFilters && (
-                    <button
-                        type="button"
-                        onClick={handleResetFilters}
-                        className="h-10 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                        title="Reset Filters"
-                    >
-                        <X size={15} />
-                    </button>
-                )}
             </div>
 
             {/* Error notice */}

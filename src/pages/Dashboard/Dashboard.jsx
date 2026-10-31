@@ -7,12 +7,20 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
 import { Tooltip } from '../../components/ui/Tooltip';
-import { formatDate, parseUTCToLocalDate, formatOrderStatus } from '../../common/utils';
+import { formatDate, formatOrderStatus } from '../../common/utils';
 import { dashboardApi } from '../../api/dashboardApi';
 
 export default function Dashboard() {
   const { orders, currentUser, loadOrders } = useStore();
   const [period, setPeriod] = useState('today');
+  const [topProducts, setTopProducts] = useState([]);
+  const [topProductsLoading, setTopProductsLoading] = useState(true);
+  const [topProductsError, setTopProductsError] = useState('');
+  const now = new Date();
+  const topProductsDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const timezoneOffset = now.getTimezoneOffset();
+  const cachedTopProducts = dashboardApi.getCachedTopSellingProducts(period, topProductsDate, timezoneOffset);
+  const displayedTopProducts = cachedTopProducts?.items ?? topProducts;
   const [summary, setSummary] = useState({
     periodOrders: 0,
     periodSales: 0,
@@ -49,6 +57,35 @@ export default function Dashboard() {
 
     fetchSummary();
   }, [period]);
+
+  useEffect(() => {
+    let isCurrentRequest = true;
+
+    const fetchTopProducts = async () => {
+      setTopProductsLoading(true);
+      setTopProductsError('');
+      try {
+        const data = await dashboardApi.getTopSellingProducts(period, topProductsDate, timezoneOffset);
+        if (isCurrentRequest) {
+          setTopProducts(data?.items ?? []);
+        }
+      } catch (err) {
+        console.error('Failed to load top-selling products:', err);
+        if (isCurrentRequest) {
+          setTopProductsError(err instanceof Error ? err.message : 'Unable to load top-selling products.');
+        }
+      } finally {
+        if (isCurrentRequest) {
+          setTopProductsLoading(false);
+        }
+      }
+    };
+
+    fetchTopProducts();
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [period, topProductsDate, timezoneOffset]);
 
   const navigate = useNavigate();
 
@@ -261,11 +298,40 @@ export default function Dashboard() {
                 <Link to="/sales" className="text-slate-600 text-xs font-bold hover:text-slate-900 transition-colors">View All</Link>
               </div>
               <div className="space-y-3">
-                <TopProduct name="Honey 500g" sold="40 sold" price="₹ 8,000" />
-                <div className="w-full h-px bg-slate-100"></div>
-                <TopProduct name="Honey 1kg" sold="15 sold" price="₹ 4,800" />
-                <div className="w-full h-px bg-slate-100"></div>
-                <TopProduct name="Honey 125g" sold="25 sold" price="₹ 1,375" />
+                {topProductsLoading && !cachedTopProducts ? (
+                  <div aria-hidden="true" className="space-y-3 animate-pulse">
+                    {[0, 1, 2].map(index => (
+                      <div key={index}>
+                        {index > 0 && <div className="mb-3 w-full h-px bg-slate-100"></div>}
+                        <div className="flex items-center justify-between py-1">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-slate-100"></div>
+                            <div className="space-y-2">
+                              <div className="h-3 w-24 rounded bg-slate-200"></div>
+                              <div className="h-2 w-14 rounded bg-slate-100"></div>
+                            </div>
+                          </div>
+                          <div className="h-3 w-16 rounded bg-slate-200"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : topProductsError ? (
+                  <p role="alert" className="py-4 text-center text-xs font-medium text-rose-600">{topProductsError}</p>
+                ) : displayedTopProducts.length > 0 ? (
+                  displayedTopProducts.map((product, index) => (
+                    <div key={product.productId}>
+                      {index > 0 && <div className="w-full h-px bg-slate-100"></div>}
+                      <TopProduct
+                        name={product.productName}
+                        sold={`${Number(product.qtySold || 0).toLocaleString()} sold`}
+                        price={`₹ ${Number(product.revenue || 0).toLocaleString('en-IN')}`}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-4 text-center text-xs font-medium text-slate-500">No product sales for this period.</p>
+                )}
               </div>
             </CardContent>
           </Card>

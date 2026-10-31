@@ -43,15 +43,14 @@ export const purchaseApi = {
         apiFetch('purchases/items', 'POST', { purchaseEdid, pageNumber, pageSize }),
 
     /** GET batches for a raw material */
-    getBatchesForMaterial: (materialEdid, batchNumber = null) => {
-        let url = `batches/material/${materialEdid}`;
-        if (batchNumber) url += `?batchNumber=${encodeURIComponent(batchNumber)}`;
-        return apiFetch(url);
+    getBatchesForMaterial: (materialEdid, batchNumber = null, unitCost = null, supplierEdid = null) => {
+        const query = new URLSearchParams();
+        if (batchNumber) query.set('batchNumber', batchNumber);
+        if (unitCost !== null && unitCost !== undefined) query.set('unitCost', unitCost);
+        if (supplierEdid) query.set('supplierEdid', supplierEdid);
+        const queryString = query.toString();
+        return apiFetch(`batches/material/${materialEdid}${queryString ? `?${queryString}` : ''}`);
     },
-
-    /** POST create a batch */
-    createBatch: (materialEdid) =>
-        apiFetch('batches/create', 'POST', { materialEdid }),
 
     /** GET batch by id */
     getBatchById: (batchEdid) =>
@@ -120,4 +119,3 @@ export const purchaseApi = {
     getUnits: () =>
         apiFetch('units/list', 'POST')
 };
-
