@@ -205,13 +205,15 @@ export default function ProductDetails() {
     }
   };
 
-  const handleUpdateStock = async (productId, newStock, remarks, rmBatches, recipe) => {
+  const handleUpdateStock = async (productId, newStock, remarks, rmBatches, recipe, packedDate, shelfLifeMonths) => {
     try {
       const payload = {
         productEdid: product.edid || product.id,
         productBatchEdid: "",
         batchNumber: "",
         productionQty: newStock,
+        packedDate,
+        shelfLifeMonths,
         reason: "Stock Reconciliation",
         remarks: remarks || "Additional production stock",
         materials: Object.entries(rmBatches).map(([matEdid, entry]) => {
@@ -330,7 +332,7 @@ export default function ProductDetails() {
           {/* Recipe / Combo + Price History side by side */}
           {product.isCombo ? (
             <div className="flex gap-5 items-start">
-              <div className="flex-1 min-w-0">
+              <div className="flex-[2] min-w-0">
                 <ComboProductView product={product} />
               </div>
               <div className="flex-1 min-w-0">
@@ -343,7 +345,7 @@ export default function ProductDetails() {
             </div>
           ) : (
             <div className="flex gap-5 items-start">
-              <div className="flex-1 min-w-0">
+              <div className="flex-[2] min-w-0">
                 <div className="bg-white border border-slate-200 rounded-2xl">
                   <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-50 transition-colors rounded-t-2xl" onClick={handleOpenRecipe}>
                     <div className="flex items-center gap-3">
@@ -372,10 +374,10 @@ export default function ProductDetails() {
                   >
                     {isRecipeLoading ? (
                       <div className="p-8 text-center text-slate-400 text-sm">Loading recipe...</div>
-                    ) : (isEditingRecipeMode || product.recipe?.length === 0) ? (
+                    ) : (isEditingRecipeMode || !Array.isArray(product.recipe) || product.recipe.length === 0) ? (
                       <RecipeEditor
                         productEdid={productEdid}
-                        initialRecipe={product.recipe}
+                        initialRecipe={Array.isArray(product.recipe) ? product.recipe : []}
                         onCancel={() => setIsEditingRecipeMode(false)}
                         onSave={async () => {
                           try {
@@ -403,7 +405,7 @@ export default function ProductDetails() {
                               </TableRow>
                             </TableHeader>
                             <TableBody padRows={false}>
-                              {product.recipe.map((ci, idx) => {
+                              {(Array.isArray(product.recipe) ? product.recipe : []).map((ci, idx) => {
                                 const matId = ci.materialId || ci.materialEdid;
                                 const material = rawMaterials.find(rm => rm.id === matId || rm.edid === matId || rm.publicId === matId);
                                 const unitStr = ci.allowedUnitSymbol || material?.allowedUnitSymbol || material?.unitSymbol || ci.unit || '';
@@ -443,6 +445,14 @@ export default function ProductDetails() {
                     <ProductBatchUsageHistory
                       productEdid={productEdid}
                       productName={product.name}
+                      isAdmin={isAdmin}
+                      onBatchUpdated={async () => {
+                        const response = await productApi.getProduct(id);
+                        const updatedProduct = response?.data || response;
+                        if (updatedProduct) {
+                          setLocalProduct(previous => ({ ...previous, stock: updatedProduct.stock }));
+                        }
+                      }}
                     />
                   </div>
                 )}

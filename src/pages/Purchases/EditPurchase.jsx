@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { X, Plus, Trash2, Paperclip, FileText, UploadCloud, Calendar, Building2, Package, CheckCircle, Clock, ArrowLeft, Save, Info, Check } from "lucide-react";
 import PageHeader from "../../components/common/PageHeader";
@@ -61,9 +61,10 @@ export default function EditPurchase() {
 
     const [supplierOptions, setSupplierOptions] = useState([]);
     const [fetchedSuppliers, setFetchedSuppliers] = useState([]);
+    const getSupplierId = (supplier) => supplier?.edid ?? supplier?.id ?? supplier?.value ?? supplier?.supplierId ?? "";
     useEffect(() => {
         setFetchedSuppliers(suppliers);
-        setSupplierOptions([{ value: "", label: "-- Select Supplier --" }, ...suppliers.map(s => ({ value: s.edid, label: s.name }))]);
+        setSupplierOptions([{ value: "", label: "-- Select Supplier --" }, ...suppliers.map(s => ({ value: getSupplierId(s), label: s.name }))]);
     }, [suppliers]);
 
     const searchTimeout = useRef(null);
@@ -76,8 +77,8 @@ export default function EditPurchase() {
                 const res = await searchSuppliers(searchTerm, searchTerm, null, 1, 20);
                 const items = Array.isArray(res) ? res : (res?.items || res?.data?.items || res?.data || []);
                 setFetchedSuppliers(prev => {
-                    const map = new Map(prev.map(s => [s.edid || s.id, s]));
-                    items.forEach(s => map.set(s.edid || s.id, s));
+                    const map = new Map(prev.map(s => [getSupplierId(s), s]));
+                    items.forEach(s => map.set(getSupplierId(s), s));
                     return Array.from(map.values());
                 });
 
@@ -85,7 +86,7 @@ export default function EditPurchase() {
                 map.set("", { value: "", label: "-- Select Supplier --" });
                 const seenSupplierNames = new Set();
                 items.forEach(s => {
-                    const id = s.edid || s.id;
+                    const id = getSupplierId(s);
                     if (id) {
                         map.set(id, { value: id, label: s.name });
                         seenSupplierNames.add((s.name || "").trim().toLowerCase());
@@ -228,7 +229,7 @@ export default function EditPurchase() {
     useEffect(() => {
         if (purchase) {
             setFormData({
-                supplierId: purchase.supplierId,
+                supplierId: purchase.supplierEdid || purchase.supplierId || "",
                 date: purchase.date.split("T")[0],
                 status: purchase.status,
                 amountPaid: purchase.amountPaid || "",
@@ -423,7 +424,11 @@ export default function EditPurchase() {
         navigate("/purchases/" + id);
     };
 
-    const selectedSupplier = suppliers.find(s => (s.edid) === formData.supplierId);
+    const originalSupplierId = purchase.supplierEdid || purchase.supplierId;
+    const selectedSupplier = fetchedSuppliers.find(s => String(getSupplierId(s)) === String(formData.supplierId))
+        || (String(formData.supplierId) === String(originalSupplierId) && purchase.supplierName
+            ? { name: purchase.supplierName }
+            : null);
     const categoryOptions = categories.map(c => ({ value: c.name, label: c.name, edid: c.edid, allowedUnitEdid: c.allowedUnitEdid, allowedUnitSymbol: c.allowedUnitSymbol }));
 
     const totalAmount = calculateTotal();
@@ -458,6 +463,7 @@ export default function EditPurchase() {
                                 items: p.items.map(item => ({ ...item, batchEdid: "" }))
                             }))}
                             options={supplierOptions}
+                            fallbackLabel={selectedSupplier?.name || "-- Select Supplier --"}
                             searchable
                             onSearchChange={handleSupplierSearch}
                             onOpen={() => handleSupplierSearch("")}

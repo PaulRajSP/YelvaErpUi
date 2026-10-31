@@ -5,6 +5,7 @@ import { purchaseApi } from '../../api/purchaseApi';
 import { Package, Edit2, ShoppingCart, TrendingDown, ArrowLeft, Archive, Layers, ShieldAlert, ChevronDown } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/Button';
+import Dropdown from '../../components/common/Dropdown';
 import DocumentViewModal from '../../components/common/DocumentViewModal';
 import { PAGE_SIZE } from '../../common/utils';
 
@@ -45,6 +46,13 @@ export default function MaterialDetails() {
     const [expandedBatches, setExpandedBatches] = useState(new Set());
     const [batchUsages, setBatchUsages] = useState({});
     const [loadingBatchUsages, setLoadingBatchUsages] = useState({});
+    const [adjustingBatch, setAdjustingBatch] = useState(null);
+    const [adjustmentType, setAdjustmentType] = useState('Out');
+    const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
+    const [adjustmentRemark, setAdjustmentRemark] = useState('');
+    const [adjustmentError, setAdjustmentError] = useState('');
+    const [savingBatchAdjustment, setSavingBatchAdjustment] = useState(false);
+    const [closingBatchId, setClosingBatchId] = useState(null);
 
     // Ref guards
     const fetchedMaterialRef = useRef(null);
@@ -176,6 +184,93 @@ export default function MaterialDetails() {
         setExpandedBatches(new Set());
     };
 
+    const openBatchAdjustment = (batch) => {
+        setAdjustingBatch(batch);
+        setAdjustmentType('Out');
+        setAdjustmentQuantity('');
+        setAdjustmentRemark('');
+        setAdjustmentError('');
+    };
+
+    const saveBatchAdjustment = async (event) => {
+        event.preventDefault();
+        const quantity = Number(adjustmentQuantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            setAdjustmentError('Enter an adjustment quantity greater than zero.');
+            return;
+        }
+        if (!adjustmentRemark.trim()) {
+            setAdjustmentError('A remark is required for every stock adjustment.');
+            return;
+        }
+
+        const batchEdid = adjustingBatch?.materialBatchEdid || adjustingBatch?.edid || adjustingBatch?.id;
+        if (!batchEdid) {
+            setAdjustmentError('Batch ID is missing.');
+            return;
+        }
+
+        setSavingBatchAdjustment(true);
+        setAdjustmentError('');
+        try {
+            await purchaseApi.adjustMaterialBatch(batchEdid, {
+                entryType: adjustmentType,
+                quantity,
+                remark: adjustmentRemark.trim()
+            });
+
+            const delta = adjustmentType === 'In' ? quantity : -quantity;
+            const entry = {
+                entryType: adjustmentType,
+                quantityUsed: quantity,
+                usageDate: new Date().toISOString(),
+                remark: adjustmentRemark.trim()
+            };
+            setBatches(previous => previous.map(batch => {
+                const id = batch.materialBatchEdid || batch.edid || batch.id;
+                return id === batchEdid
+                    ? {
+                        ...batch,
+                        qtyRemaining: Number(batch.qtyRemaining || 0) + delta,
+                        entriesCount: Number(batch.entriesCount || 0) + 1,
+                        totalUsed: Number(batch.totalUsed || 0) + (adjustmentType === 'Out' ? quantity : 0),
+                        latestUsageDate: entry.usageDate
+                    }
+                    : batch;
+            }));
+            setBatchUsages(previous => Array.isArray(previous[batchEdid])
+                ? { ...previous, [batchEdid]: [entry, ...previous[batchEdid]] }
+                : previous);
+            setMaterial(previous => previous
+                ? { ...previous, stock: Number(previous.stock || 0) + delta }
+                : previous);
+            setAdjustingBatch(null);
+        } catch (error) {
+            setAdjustmentError(error.message || 'Failed to adjust batch quantity.');
+        } finally {
+            setSavingBatchAdjustment(false);
+        }
+    };
+
+    const closeBatch = async (batch) => {
+        const batchEdid = batch.materialBatchEdid || batch.edid || batch.id;
+        if (Number(batch.qtyRemaining || 0) !== 0) return;
+        if (!window.confirm(`Close batch ${batch.batchNumber}? This cannot be undone.`)) return;
+
+        setClosingBatchId(batchEdid);
+        try {
+            await purchaseApi.closeMaterialBatch(batchEdid);
+            setBatches(previous => previous.map(item => {
+                const id = item.materialBatchEdid || item.edid || item.id;
+                return id === batchEdid ? { ...item, isActive: false } : item;
+            }));
+        } catch (error) {
+            window.alert(error.message || 'Failed to close batch.');
+        } finally {
+            setClosingBatchId(null);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -195,7 +290,7 @@ export default function MaterialDetails() {
         );
     }
 
-    const unitSymbol = material.unitSymbol || material.allowedUnitSymbol || material.unit || '';
+    const unitSymbol = material.allowedUnitSymbol || material.AllowedUnitSymbol || material.unitSymbol || material.unit || '';
 
     const OVERVIEW_ITEMS = [
         { label: 'Category', value: material.category, Icon: Archive, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
@@ -316,6 +411,11 @@ export default function MaterialDetails() {
                                 batchUsages={batchUsages}
                                 loadingBatchUsages={loadingBatchUsages}
                                 toggleBatch={toggleBatch}
+                                isAdmin={isAdmin}
+                                onAdjustBatch={openBatchAdjustment}
+                                onCloseBatch={closeBatch}
+                                adjustingBatchId={savingBatchAdjustment ? (adjustingBatch?.materialBatchEdid || adjustingBatch?.edid || adjustingBatch?.id) : null}
+                                closingBatchId={closingBatchId}
                             />
                         )}
                     </div>
@@ -346,6 +446,78 @@ export default function MaterialDetails() {
                     </div>
                 </div>
             </div>
+
+            {adjustingBatch && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4" role="presentation">
+                    <form
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="batch-adjustment-title"
+                        onSubmit={saveBatchAdjustment}
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                    >
+                        <h2 id="batch-adjustment-title" className="text-lg font-bold text-slate-900">Adjust Batch Quantity</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Batch {adjustingBatch.batchNumber} currently has {Number(adjustingBatch.qtyRemaining || 0)} {unitSymbol} remaining.
+                        </p>
+                        <div className="mt-5 space-y-4">
+                            <Dropdown
+                                label="Adjustment type"
+                                required
+                                value={adjustmentType}
+                                onChange={setAdjustmentType}
+                                options={[
+                                    { value: 'In', label: 'In — add stock' },
+                                    { value: 'Out', label: 'Out — remove stock' }
+                                ]}
+                                className="w-full"
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="block space-y-1.5">
+                                    <span className="text-xs font-bold text-slate-600">Quantity <span className="text-red-500">*</span></span>
+                                    <input
+                                        type="number"
+                                        min="0.0001"
+                                        step="0.0001"
+                                        required
+                                        autoFocus
+                                        value={adjustmentQuantity}
+                                        onChange={event => setAdjustmentQuantity(event.target.value)}
+                                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-indigo-400 focus:outline-none"
+                                    />
+                                </label>
+                                <div className="space-y-1.5">
+                                    <span className="block text-xs font-bold text-slate-600">Unit</span>
+                                    <div
+                                        aria-label={`Unit: ${unitSymbol || 'Not set'}`}
+                                        className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
+                                    >
+                                        {unitSymbol || 'Not set'}
+                                    </div>
+                                </div>
+                            </div>
+                            <label className="block space-y-1.5">
+                                <span className="text-xs font-bold text-slate-600">Remark <span className="text-red-500">*</span></span>
+                                <textarea
+                                    value={adjustmentRemark}
+                                    onChange={event => setAdjustmentRemark(event.target.value)}
+                                    rows={2}
+                                    required
+                                    maxLength={500}
+                                    className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                                />
+                            </label>
+                            {adjustmentError && <p className="text-sm text-red-600">{adjustmentError}</p>}
+                        </div>
+                        <div className="mt-6 flex justify-end gap-2">
+                            <Button variant="secondary" onClick={() => setAdjustingBatch(null)} disabled={savingBatchAdjustment}>Cancel</Button>
+                            <Button type="submit" disabled={savingBatchAdjustment}>
+                                {savingBatchAdjustment ? 'Saving…' : 'Save Adjustment'}
+                            </Button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             {/* Document View Modal */}
             {viewDoc && (

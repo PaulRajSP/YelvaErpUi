@@ -55,6 +55,7 @@ export default function NewPurchase() {
     const [supplierOptions, setSupplierOptions] = useState([{ value: "", label: "-- Select Supplier --" }]);
     const [fetchedSuppliers, setFetchedSuppliers] = useState([]);
     const searchTimeout = useRef(null);
+    const getSupplierId = (supplier) => supplier?.edid ?? supplier?.id ?? supplier?.value ?? supplier?.supplierId ?? "";
 
     const handleSupplierSearch = (term = "") => {
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -66,8 +67,8 @@ export default function NewPurchase() {
                 const items = Array.isArray(res) ? res : (res?.items || res?.data?.items || res?.data || []);
 
                 setFetchedSuppliers(prev => {
-                    const map = new Map(prev.map(s => [s.edid || s.id, s]));
-                    items.forEach(s => map.set(s.edid || s.id, s));
+                    const map = new Map(prev.map(s => [getSupplierId(s), s]));
+                    items.forEach(s => map.set(getSupplierId(s), s));
                     return Array.from(map.values());
                 });
 
@@ -76,7 +77,7 @@ export default function NewPurchase() {
                 const seenSupplierNames = new Set();
 
                 items.forEach(s => {
-                    const id = s.edid || s.id;
+                    const id = getSupplierId(s);
                     if (id) {
                         map.set(id, { value: id, label: s.name });
                         seenSupplierNames.add((s.name || "").trim().toLowerCase());
@@ -84,12 +85,12 @@ export default function NewPurchase() {
                 });
 
                 if (formData?.supplierId && !map.has(formData.supplierId)) {
-                    const cur = fetchedSuppliers.find(s => (s.edid || s.id) === formData.supplierId);
+                    const cur = fetchedSuppliers.find(s => getSupplierId(s) === formData.supplierId);
                     if (cur) {
                         const curNormName = (cur.name || "").trim().toLowerCase();
                         const matchingItem = items.find(s => (s.name || "").trim().toLowerCase() === curNormName);
                         if (matchingItem) {
-                            const actualId = matchingItem.edid || matchingItem.id;
+                            const actualId = getSupplierId(matchingItem);
                             setFormData(prev => ({ ...prev, supplierId: actualId }));
                         } else if (!seenSupplierNames.has(curNormName)) {
                             map.set(formData.supplierId, { value: formData.supplierId, label: cur.name });
@@ -422,7 +423,13 @@ export default function NewPurchase() {
         }
     };
 
-    const selectedSupplier = fetchedSuppliers.find(s => (s.edid) === formData.supplierId);
+    const selectedSupplierOption = formData.supplierId
+        ? supplierOptions.find(option => String(option.value) === String(formData.supplierId))
+        : null;
+    const selectedSupplier = formData.supplierId
+        ? fetchedSuppliers.find(s => String(getSupplierId(s)) === String(formData.supplierId))
+            || (selectedSupplierOption ? { name: selectedSupplierOption.label } : null)
+        : null;
     const categoryOptions = categories.map(c => ({ value: c.name, label: c.name, edid: c.edid, allowedUnitEdid: c.allowedUnitEdid, allowedUnitSymbol: c.allowedUnitSymbol }));
 
     const totalAmount = calculateTotal();
@@ -457,6 +464,7 @@ export default function NewPurchase() {
                                 items: p.items.map(item => ({ ...item, batchEdid: "" }))
                             }))}
                             options={supplierOptions}
+                            fallbackLabel={selectedSupplier?.name || "-- Select Supplier --"}
                             searchable
                             onSearchChange={handleSupplierSearch}
                             onOpen={() => handleSupplierSearch("")}

@@ -2,12 +2,34 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import BatchSelector from '../common/BatchSelector';
 import { productApi } from '../../api/productApi';
+import Dropdown from '../common/Dropdown';
+import DatePicker from '../common/DatePicker';
+import { commonApi } from '../../api/commonApi';
+
+const expiryDateFor = (packedDate, months) => {
+    if (!packedDate || !months) return '';
+    const [year, month, day] = packedDate.split('-').map(Number);
+    const targetMonth = month - 1 + Number(months);
+    const lastDay = new Date(year, targetMonth + 1, 0).getDate();
+    const expiry = new Date(year, targetMonth, Math.min(day, lastDay));
+    return `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateOnly = value => new Date(`${value}T00:00:00`).toLocaleDateString();
+const todayLocal = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
 
 export default function StockModal({ isOpen, onClose, product, onSave }) {
     const [recipe, setRecipe] = useState([]);
     const [recipeLoading, setRecipeLoading] = useState(false);
     const [newStock, setNewStock] = useState('');
     const [remarks, setRemarks] = useState('');
+    const [packedDate, setPackedDate] = useState('');
+    const [shelfLifeMonths, setShelfLifeMonths] = useState('');
+    const [shelfLifeOptions, setShelfLifeOptions] = useState([]);
+    const [shelfLifeError, setShelfLifeError] = useState('');
     const [rmBatches, setRmBatches] = useState({}); // { materialEdid: { batch, isValid, validating, requiredQty, availableQty } }
     const [isSaving, setIsSaving] = useState(false);
 
@@ -16,9 +38,26 @@ export default function StockModal({ isOpen, onClose, product, onSave }) {
     const rmEnabled = stockValue > 0 && recipe.length > 0;
 
     useEffect(() => {
+        if (!isOpen) return undefined;
+        let isCurrent = true;
+        setShelfLifeError('');
+        commonApi.getShelfLifeOptions()
+            .then(options => {
+                if (isCurrent) setShelfLifeOptions(options);
+            })
+            .catch(err => {
+                console.error('Failed to load shelf-life options:', err);
+                if (isCurrent) setShelfLifeError(err.message || 'Failed to load shelf-life options.');
+            });
+        return () => { isCurrent = false; };
+    }, [isOpen]);
+
+    useEffect(() => {
         if (isOpen && product) {
             setNewStock(product.stock?.toString() || '0');
             setRemarks('');
+            setPackedDate('');
+            setShelfLifeMonths('');
             setRmBatches({});
             setRecipe([]);
             // Fetch recipe from API
@@ -36,6 +75,8 @@ export default function StockModal({ isOpen, onClose, product, onSave }) {
         } else {
             setNewStock('');
             setRemarks('');
+            setPackedDate('');
+            setShelfLifeMonths('');
             setRmBatches({});
             setRecipe([]);
             setIsSaving(false);
@@ -111,11 +152,15 @@ export default function StockModal({ isOpen, onClose, product, onSave }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!product || isSaving) return;
+        if (!packedDate || !shelfLifeOptions.some(option => option.value === shelfLifeMonths)) {
+            window.alert('Choose a packed date and shelf life.');
+            return;
+        }
         if (recipe.length > 0 && stockValue > 0 && !allValid) return;
         
         setIsSaving(true);
         try {
-            await onSave(product.id, stockValue, remarks, rmBatches, recipe);
+            await onSave(product.id, stockValue, remarks, rmBatches, recipe, packedDate, Number(shelfLifeMonths));
         } finally {
             setIsSaving(false);
         }
@@ -171,6 +216,39 @@ export default function StockModal({ isOpen, onClose, product, onSave }) {
                                 placeholder="e.g., Stock Reconciliation"
                             />
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Packed Date *</label>
+                            <DatePicker
+                                value={packedDate}
+                                onChange={setPackedDate}
+                                required
+                                maxDate={todayLocal()}
+                                className="w-full"
+                            />
+                        </div>
+                        <Dropdown
+                            label="Shelf Life"
+                            required
+                            value={shelfLifeMonths}
+                            onChange={setShelfLifeMonths}
+                            options={shelfLifeOptions}
+                            placeholder="Choose shelf life"
+                            disabled={shelfLifeOptions.length === 0}
+                            className="w-full"
+                        />
+                        {shelfLifeError && (
+                            <p className="col-span-2 -mt-2 text-xs text-red-600">{shelfLifeError}</p>
+                        )}
+                        {packedDate && shelfLifeMonths && (
+                            <p className="col-span-2 -mt-2 text-xs text-slate-500">
+                                Packed: <strong className="text-slate-700">{formatDateOnly(packedDate)}</strong>
+                                <span className="mx-2">→</span>
+                                Expires: <strong className="text-slate-700">{formatDateOnly(expiryDateFor(packedDate, shelfLifeMonths))}</strong>
+                            </p>
+                        )}
                     </div>
 
                     {/* Raw Material Requirements */}

@@ -8,6 +8,28 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '.
 import { formatDateTime } from '../../common/utils';
 import { productionApi } from '../../api/productionApi';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import Dropdown from '../../components/common/Dropdown';
+import DatePicker from '../../components/common/DatePicker';
+import { commonApi } from '../../api/commonApi';
+
+const expiryDateFor = (packedDate, months) => {
+    if (!packedDate || !months) return '';
+    const [year, month, day] = packedDate.split('-').map(Number);
+    const targetMonth = month - 1 + Number(months);
+    const lastDay = new Date(year, targetMonth + 1, 0).getDate();
+    const expiry = new Date(year, targetMonth, Math.min(day, lastDay));
+    return `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateOnly = value => {
+    if (!value) return '-';
+    const dateValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value;
+    return new Date(dateValue).toLocaleDateString();
+};
+const todayLocal = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
 
 export default function ProductionDetail() {
     const { id } = useParams();
@@ -21,6 +43,10 @@ export default function ProductionDetail() {
     // Completion modal state
     const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
     const [completedAmount, setCompletedAmount] = useState('');
+    const [packedDate, setPackedDate] = useState('');
+    const [shelfLifeMonths, setShelfLifeMonths] = useState('');
+    const [shelfLifeOptions, setShelfLifeOptions] = useState([]);
+    const [shelfLifeError, setShelfLifeError] = useState('');
 
     // Cancel confirmation modal state
     const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -53,6 +79,19 @@ export default function ProductionDetail() {
         }
     }, [id]);
 
+    useEffect(() => {
+        let isCurrent = true;
+        commonApi.getShelfLifeOptions()
+            .then(options => {
+                if (isCurrent) setShelfLifeOptions(options);
+            })
+            .catch(err => {
+                console.error('Failed to load shelf-life options:', err);
+                if (isCurrent) setShelfLifeError(err.message || 'Failed to load shelf-life options.');
+            });
+        return () => { isCurrent = false; };
+    }, []);
+
     const handleStatusChange = async (newStatus) => {
         if (!request) return;
         setIsUpdating(true);
@@ -82,10 +121,19 @@ export default function ProductionDetail() {
             });
             return;
         }
+        if (!packedDate || !shelfLifeOptions.some(option => option.value === shelfLifeMonths)) {
+            setAlertModal({
+                isOpen: true,
+                title: 'Batch Dates Required',
+                message: 'Choose a packed date and shelf life of 12 or 18 months.',
+                variant: 'warning'
+            });
+            return;
+        }
 
         setIsUpdating(true);
         try {
-            await productionApi.updateStatus(id, 'Completed', qtyNum);
+            await productionApi.updateStatus(id, 'Completed', qtyNum, packedDate, Number(shelfLifeMonths));
             setIsCompleteModalOpen(false);
             await fetchDetails();
         } catch (err) {
@@ -126,7 +174,7 @@ export default function ProductionDetail() {
         );
     }
 
-    const normStatus = (request.status || '').toLowerCase().replace('_', '');
+    const normStatus = String(request.status || '').toLowerCase().replace(/[\s_-]/g, '');
 
     return (
         <div className="space-y-6 pb-12">
@@ -166,37 +214,14 @@ export default function ProductionDetail() {
                             </>
                         )}
                         {normStatus === 'approved' && (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    icon={X}
-                                    onClick={() => setCancelModalOpen(true)}
-                                    disabled={isUpdating}
-                                    className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 cursor-pointer"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    icon={Play}
-                                    onClick={() => handleStatusChange('InProgress')}
-                                    disabled={isUpdating}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
-                                >
-                                    Start Production
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    icon={Check}
-                                    onClick={() => {
-                                        setCompletedAmount(request.requestedQty || '');
-                                        setIsCompleteModalOpen(true);
-                                    }}
-                                    disabled={isUpdating}
-                                    className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                                >
-                                    Mark as Completed
-                                </Button>
-                            </>
+                            <Button
+                                icon={Play}
+                                onClick={() => handleStatusChange('InProgress')}
+                                disabled={isUpdating}
+                                className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                            >
+                                Start Production
+                            </Button>
                         )}
                         {normStatus === 'inprogress' && (
                             <>
@@ -213,6 +238,8 @@ export default function ProductionDetail() {
                                     icon={Check}
                                     onClick={() => {
                                         setCompletedAmount(request.requestedQty || '');
+                                        setPackedDate('');
+                                        setShelfLifeMonths('');
                                         setIsCompleteModalOpen(true);
                                     }}
                                     disabled={isUpdating}
@@ -270,6 +297,20 @@ export default function ProductionDetail() {
                                 <span className="text-slate-500">Completed Qty:</span>
                                 <span className="font-bold text-slate-900">{request.completedQty ?? 0}</span>
                             </div>
+
+                            {request.packedDate && (
+                                <div className="pt-2 flex justify-between items-center">
+                                    <span className="text-slate-500">Packed Date:</span>
+                                    <span className="font-medium text-slate-700">{formatDateOnly(request.packedDate)}</span>
+                                </div>
+                            )}
+
+                            {request.expiryDate && (
+                                <div className="pt-2 flex justify-between items-center">
+                                    <span className="text-slate-500">Expiry Date:</span>
+                                    <span className="font-medium text-slate-700">{formatDateOnly(request.expiryDate)}</span>
+                                </div>
+                            )}
 
                             <div className="pt-2 flex justify-between items-center">
                                 <span className="text-slate-500">Status:</span>
@@ -482,6 +523,41 @@ export default function ProductionDetail() {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block space-y-1.5">
+                                    <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        Packed Date <span className="text-red-500">*</span>
+                                    </span>
+                                    <DatePicker
+                                        value={packedDate}
+                                        onChange={setPackedDate}
+                                        required
+                                        maxDate={todayLocal()}
+                                        className="w-full"
+                                    />
+                                </label>
+                                <Dropdown
+                                    label="Shelf Life"
+                                    required
+                                    value={shelfLifeMonths}
+                                    onChange={setShelfLifeMonths}
+                                    options={shelfLifeOptions}
+                                    placeholder="Choose shelf life"
+                                    disabled={shelfLifeOptions.length === 0}
+                                    className="w-full"
+                                />
+                                {shelfLifeError && (
+                                    <p className="col-span-2 -mt-2 text-xs text-red-600">{shelfLifeError}</p>
+                                )}
+                                {packedDate && shelfLifeMonths && (
+                                    <p className="col-span-2 -mt-2 text-xs text-slate-500">
+                                        Packed: <strong className="text-slate-700">{formatDateOnly(packedDate)}</strong>
+                                        <span className="mx-2">→</span>
+                                        Expires: <strong className="text-slate-700">{formatDateOnly(expiryDateFor(packedDate, shelfLifeMonths))}</strong>
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         {/* Modal Footer */}

@@ -3,11 +3,16 @@ import { ChevronDown, Check, Search } from 'lucide-react';
 import { formatOrderStatus } from '../../common/utils';
 
 // Moved outside the component to prevent recreation on every render
+const getOptionValue = (opt) => {
+    if (typeof opt === 'string') return opt;
+    return opt?.id ?? opt?.edid ?? opt?.value ?? opt?.supplierId ?? '';
+};
+
 const isAllOption = (opt) => {
     if (typeof opt === 'string') {
         return opt.trim().toLowerCase() === 'all';
     }
-    const candidates = [opt?.id, opt?.value, opt?.label, opt?.name];
+    const candidates = [opt?.id, opt?.edid, opt?.value, opt?.label, opt?.name, opt?.supplierId];
     return candidates.some(
         (c) => c != null && String(c).trim().toLowerCase() === 'all'
     );
@@ -31,6 +36,7 @@ export const Dropdown = forwardRef(({
     searchPlaceholder = 'Search...',
     onSearchChange,
     onOpen,
+    fallbackLabel,
     isDefault = false
 }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -57,11 +63,12 @@ export const Dropdown = forwardRef(({
         .filter((opt) => !isDefault || !isAllOption(opt))
         .map((opt) => {
             if (typeof opt === 'string') return { value: opt, label: opt };
+            const value = getOptionValue(opt);
             return {
-                value: opt.id ?? opt.value,
-                label: opt.label ?? opt.name ?? '',
+                ...opt,
+                value,
+                label: opt.label ?? opt.name ?? opt.title ?? String(value ?? ''),
                 isDefault: opt.isDefault ?? false,
-                ...opt
             };
         });
 
@@ -80,8 +87,10 @@ export const Dropdown = forwardRef(({
         );
 
     // Resolve the visible selection.
-    const selected = normalised.find((o) => o.value === value)
-        || (value !== undefined && value !== null && value !== '' && !isAllOption(value) ? { value, label: formatOrderStatus(value) || String(value) } : defaultOpt);
+    const selected = normalised.find((o) => String(o.value) === String(value))
+        || (value !== undefined && value !== null && value !== '' && !isAllOption(value)
+            ? { value, label: fallbackLabel ?? (formatOrderStatus(value) || String(value)) }
+            : defaultOpt);
 
     // Auto-select when the component mounts and no value is provided, or when isDefault=true and value is 'All'
     useEffect(() => {
@@ -112,8 +121,19 @@ export const Dropdown = forwardRef(({
 
         if (!isOpen && dropdownRef.current) {
             const rect = dropdownRef.current.getBoundingClientRect();
-            const spaceBelow = window.innerHeight - rect.bottom;
-            setOpenUpwards(spaceBelow < 250);
+            let scrollContainer = dropdownRef.current.parentElement;
+            while (scrollContainer && scrollContainer !== document.body) {
+                const overflowY = window.getComputedStyle(scrollContainer).overflowY;
+                if (overflowY === 'auto' || overflowY === 'scroll') break;
+                scrollContainer = scrollContainer.parentElement;
+            }
+
+            const containerBounds = scrollContainer && scrollContainer !== document.body
+                ? scrollContainer.getBoundingClientRect()
+                : { top: 0, bottom: window.innerHeight };
+            const spaceBelow = Math.min(window.innerHeight, containerBounds.bottom) - rect.bottom;
+            const spaceAbove = rect.top - Math.max(0, containerBounds.top);
+            setOpenUpwards(spaceBelow < 250 && spaceAbove > spaceBelow);
             if (onOpen) onOpen();
         }
 

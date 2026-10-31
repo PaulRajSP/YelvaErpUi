@@ -26,6 +26,6 @@ export const productionApi = {
         apiFetch('production-requests/create', 'POST', payload),
 
     /** PATCH update production request status */
-    updateStatus: (edid, status, completedQty = 0.00) =>
-        apiFetch(`production-requests/${edid}/status`, 'PATCH', { status, completedQty })
+    updateStatus: (edid, status, completedQty = 0.00, packedDate = null, shelfLifeMonths = null) =>
+        apiFetch(`production-requests/${edid}/status`, 'PATCH', { status, completedQty, packedDate, shelfLifeMonths })
 };

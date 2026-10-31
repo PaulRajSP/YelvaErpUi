@@ -3,12 +3,14 @@ import { productApi } from '../../api/productApi';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../ui/Table';
 import { Pagination } from '../ui/Pagination';
 import { formatDate, formatDateTime } from '../../common/utils';
-import { Calendar, ChevronDown, ChevronRight, ChevronUp, Hash, Loader2, Package, RefreshCw, Layers, Search, X } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, ChevronUp, Hash, Loader2, Package, RefreshCw, Layers, Search, X, LockKeyhole } from 'lucide-react';
+import { Button } from '../ui/Button';
+import Dropdown from '../common/Dropdown';
 
 const PAGE_SIZE = 5;
 const INNER_PAGE_SIZE = 5;
 
-export default function ProductBatchUsageHistory({ productEdid, productName }) {
+export default function ProductBatchUsageHistory({ productEdid, productName, isAdmin = false, onBatchUpdated }) {
     const [isOpen, setIsOpen] = useState(true);
     const [batches, setBatches] = useState([]);
     const [loadingBatches, setLoadingBatches] = useState(false);
@@ -21,6 +23,13 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
     const [expandedBatches, setExpandedBatches] = useState(new Set());
     const [batchUsages, setBatchUsages] = useState({});
     const [loadingBatchUsages, setLoadingBatchUsages] = useState({});
+    const [adjustingBatch, setAdjustingBatch] = useState(null);
+    const [adjustmentType, setAdjustmentType] = useState('Out');
+    const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
+    const [adjustmentRemark, setAdjustmentRemark] = useState('');
+    const [adjustmentError, setAdjustmentError] = useState('');
+    const [savingAdjustment, setSavingAdjustment] = useState(false);
+    const [closingBatchId, setClosingBatchId] = useState(null);
 
     // Inner movement search & pagination states per batch
     const [usageSearches, setUsageSearches] = useState({});
@@ -111,6 +120,86 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
         setUsagePages(prev => ({ ...prev, [batchEdid]: page }));
     };
 
+    const expandBatchMovements = async (batchEdid) => {
+        setExpandedBatches(previous => new Set(previous).add(batchEdid));
+        await fetchUsageHistory(batchEdid, usageSearches[batchEdid] || '');
+    };
+
+    const openBatchAdjustment = (batch) => {
+        setAdjustingBatch(batch);
+        setAdjustmentType('Out');
+        setAdjustmentQuantity('');
+        setAdjustmentRemark('');
+        setAdjustmentError('');
+    };
+
+    const saveBatchAdjustment = async (event) => {
+        event.preventDefault();
+        const quantity = Number(adjustmentQuantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            setAdjustmentError('Enter an adjustment quantity greater than zero.');
+            return;
+        }
+        if (!adjustmentRemark.trim()) {
+            setAdjustmentError('A remark is required for every stock adjustment.');
+            return;
+        }
+
+        const batchEdid = adjustingBatch?.productBatchEdid || adjustingBatch?.edid || adjustingBatch?.id;
+        if (!batchEdid) {
+            setAdjustmentError('Batch ID is missing.');
+            return;
+        }
+
+        setSavingAdjustment(true);
+        setAdjustmentError('');
+        try {
+            await productApi.adjustProductBatch(productEdid, batchEdid, {
+                entryType: adjustmentType,
+                quantity,
+                remark: adjustmentRemark.trim()
+            });
+            setAdjustingBatch(null);
+            try {
+                await fetchBatches(search, batchPage);
+                await expandBatchMovements(batchEdid);
+                await onBatchUpdated?.();
+            } catch (error) {
+                console.error('Product batch adjustment saved, but refreshed data could not be loaded:', error);
+                window.alert('Adjustment was saved, but the latest stock could not be refreshed. Reload the page to see the updated stock.');
+            }
+        } catch (error) {
+            setAdjustmentError(error.message || 'Failed to adjust product batch quantity.');
+        } finally {
+            setSavingAdjustment(false);
+        }
+    };
+
+    const closeBatch = async (batch) => {
+        const batchEdid = batch.productBatchEdid || batch.edid || batch.id;
+        const remainingQty = Number(batch.remainingQty ?? batch.RemainingQty ?? 0);
+        if (remainingQty !== 0) return;
+        if (!window.confirm(`Close batch ${batch.batchNumber}? This cannot be undone.`)) return;
+
+        setClosingBatchId(batchEdid);
+        try {
+            await productApi.closeProductBatch(productEdid, batchEdid);
+            try {
+                await Promise.all([
+                    fetchBatches(search, batchPage),
+                    onBatchUpdated?.()
+                ]);
+            } catch (error) {
+                console.error('Product batch closed, but refreshed data could not be loaded:', error);
+                window.alert('Batch was closed, but the latest stock could not be refreshed. Reload the page to see the updated stock.');
+            }
+        } catch (error) {
+            window.alert(error.message || 'Failed to close product batch.');
+        } finally {
+            setClosingBatchId(null);
+        }
+    };
+
     // Toggle batch accordion and load usage from API
     const toggleBatch = async (batch) => {
         const batchEdid = batch.productBatchEdid || batch.edid || batch.id;
@@ -125,15 +214,7 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
             return;
         }
 
-        setExpandedBatches(prev => {
-            const next = new Set(prev);
-            next.add(batchEdid);
-            return next;
-        });
-
-        // Always fetch from API when opening
-        const currentSearch = usageSearches[batchEdid] || '';
-        fetchUsageHistory(batchEdid, currentSearch);
+        await expandBatchMovements(batchEdid);
     };
 
     // Client-side fallback filtering if server query was cached or running older build
@@ -239,9 +320,11 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                             <TableHead className="text-left font-semibold text-slate-600">Production No</TableHead>
                                             <TableHead className="text-right font-semibold text-slate-600">Produced Qty</TableHead>
                                             <TableHead className="text-right font-semibold text-slate-600">Remaining Stock</TableHead>
-                                            <TableHead className="text-left font-semibold text-slate-600">Latest Usage Date</TableHead>
+                                            <TableHead className="text-left font-semibold text-slate-600">Packed Date</TableHead>
+                                            <TableHead className="text-left font-semibold text-slate-600">Expiry Date</TableHead>
                                             <TableHead className="text-center font-semibold text-slate-600">Entries</TableHead>
                                             <TableHead className="text-right font-semibold text-slate-600 pr-6">Total Used</TableHead>
+                                            {isAdmin && <TableHead className="text-right font-semibold text-slate-600 pr-4">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody padRows={false}>
@@ -252,14 +335,14 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                             const isLoadingUsages = loadingBatchUsages[batchEdid];
                                             const hasLoadedUsages = Array.isArray(batchUsages[batchEdid]);
 
-                                            // Determine latest usage date from list response or expanded data
-                                            const latestDate = batch.latestUsageDate || batch.LatestUsageDate || (hasLoadedUsages && allUsages.length > 0 ? (allUsages[0].usageDate || allUsages[0].UsageDate) : null);
-                                            
                                             // Determine entries count from list response or expanded data
                                             const entriesCount = Number(batch.entriesCount ?? batch.EntriesCount ?? (hasLoadedUsages ? allUsages.length : 0));
                                             
                                             // Determine total used from list response or expanded data
-                                            const totalUsed = Number(batch.totalUsed ?? batch.TotalUsed ?? (hasLoadedUsages ? allUsages.reduce((sum, u) => sum + Number(u.quantityUsed ?? u.QuantityUsed ?? 0), 0) : 0));
+                                            const totalUsed = Number(batch.totalUsed ?? batch.TotalUsed ?? (hasLoadedUsages ? allUsages.reduce((sum, u) => {
+                                                const entryType = String(u.entryType ?? u.EntryType ?? 'Out').toLowerCase();
+                                                return sum + (entryType === 'out' ? Number(u.quantityUsed ?? u.QuantityUsed ?? 0) : 0);
+                                            }, 0) : 0));
 
                                             // Inner movement pagination
                                             const currentUsagePage = usagePages[batchEdid] || 1;
@@ -291,9 +374,9 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                                                 <Hash size={13} className="text-indigo-500 shrink-0" />
                                                                 <span className="font-bold text-slate-800">{batch.batchNumber}</span>
                                                                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                                                    Number(batch.remainingQty) > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                                    !(batch.isActive ?? batch.IsActive) ? 'bg-slate-100 text-slate-500 border border-slate-200' : Number(batch.remainingQty) > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
                                                                 }`}>
-                                                                    {Number(batch.remainingQty) > 0 ? 'In Stock' : 'Depleted'}
+                                                                    {!(batch.isActive ?? batch.IsActive) ? 'Closed' : Number(batch.remainingQty) > 0 ? 'In Stock' : 'Depleted'}
                                                                 </span>
                                                             </div>
                                                         </TableCell>
@@ -312,13 +395,11 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                                         <TableCell className="text-right text-xs font-mono font-bold text-slate-900">
                                                             {batch.remainingQty ?? 0}
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                                                <Calendar size={12} className="text-slate-400 shrink-0" />
-                                                                <span>
-                                                                    {latestDate ? formatDate(latestDate) : '—'}
-                                                                </span>
-                                                            </div>
+                                                        <TableCell className="text-xs text-slate-600 whitespace-nowrap">
+                                                            {batch.packedDate || batch.PackedDate ? formatDate(batch.packedDate || batch.PackedDate) : '—'}
+                                                        </TableCell>
+                                                        <TableCell className="text-xs text-slate-600 whitespace-nowrap">
+                                                            {batch.expiryDate || batch.ExpiryDate ? formatDate(batch.expiryDate || batch.ExpiryDate) : '—'}
                                                         </TableCell>
                                                         <TableCell className="text-center">
                                                             <span className={`text-xs font-semibold ${entriesCount > 0 ? 'text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200' : 'text-slate-500'}`}>
@@ -328,12 +409,40 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                                         <TableCell className="text-right font-bold text-slate-800 pr-6 text-xs font-mono">
                                                             {totalUsed}
                                                         </TableCell>
+                                                        {isAdmin && (
+                                                            <TableCell className="text-right pr-4" onClick={event => event.stopPropagation()}>
+                                                                {(batch.isActive ?? batch.IsActive) ? (
+                                                                    <div className="inline-flex items-center gap-1">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="secondary"
+                                                                            disabled={closingBatchId === batchEdid || savingAdjustment}
+                                                                            onClick={() => openBatchAdjustment(batch)}
+                                                                        >
+                                                                            Adjust
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="soft"
+                                                                            icon={LockKeyhole}
+                                                                            title={Number(batch.remainingQty ?? batch.RemainingQty ?? 0) === 0 ? 'Close batch' : 'Remaining quantity must be zero to close'}
+                                                                            disabled={Number(batch.remainingQty ?? batch.RemainingQty ?? 0) !== 0 || closingBatchId === batchEdid || savingAdjustment}
+                                                                            onClick={() => closeBatch(batch)}
+                                                                        >
+                                                                            {closingBatchId === batchEdid ? 'Closing…' : 'Close'}
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-slate-400">—</span>
+                                                                )}
+                                                            </TableCell>
+                                                        )}
                                                     </TableRow>
 
                                                     {/* Nested Accordion for Individual Usage Movements */}
                                                     {isExpanded && (
                                                         <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
-                                                            <TableCell colSpan={8} className="p-0 border-b border-slate-200">
+                                                            <TableCell colSpan={isAdmin ? 10 : 9} className="p-0 border-b border-slate-200">
                                                                 <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100">
                                                                     <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                                                                         {/* Inner Header with Title and Search by Remark */}
@@ -399,7 +508,8 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                                                                         <TableRow>
                                                                                             <TableHead className="text-left w-48 font-semibold text-slate-600">Date & Time</TableHead>
                                                                                             <TableHead className="text-left font-semibold text-slate-600">Remarks / Movement</TableHead>
-                                                                                            <TableHead className="text-right font-semibold text-slate-600 pr-6">Quantity Used</TableHead>
+                                                                                            <TableHead className="text-center font-semibold text-slate-600">Type</TableHead>
+                                                                                            <TableHead className="text-right font-semibold text-slate-600 pr-6">Quantity</TableHead>
                                                                                         </TableRow>
                                                                                     </TableHeader>
                                                                                     <TableBody padRows={false}>
@@ -413,6 +523,17 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                                                                                                 </TableCell>
                                                                                                 <TableCell className="text-xs text-slate-700">
                                                                                                     {usage.remark || usage.Remark || 'Product consumed / dispatched'}
+                                                                                                </TableCell>
+                                                                                                <TableCell className="text-center">
+                                                                                                    {(() => {
+                                                                                                        const entryType = String(usage.entryType ?? usage.EntryType ?? 'Out');
+                                                                                                        const isIncoming = entryType.toLowerCase() === 'in';
+                                                                                                        return (
+                                                                                                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${isIncoming ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                                                                                                {isIncoming ? 'In' : 'Out'}
+                                                                                                            </span>
+                                                                                                        );
+                                                                                                    })()}
                                                                                                 </TableCell>
                                                                                                 <TableCell className="text-right font-bold text-xs text-slate-800 pr-6 font-mono whitespace-nowrap">
                                                                                                     {usage.quantityUsed ?? usage.QuantityUsed ?? 0}
@@ -491,6 +612,68 @@ export default function ProductBatchUsageHistory({ productEdid, productName }) {
                             <p>{search ? `No batches matching "${search}".` : 'No batches found for this product.'}</p>
                         </div>
                     )}
+                </div>
+            )}
+
+            {adjustingBatch && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4" role="presentation">
+                    <form
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="product-batch-adjustment-title"
+                        onSubmit={saveBatchAdjustment}
+                        onClick={event => event.stopPropagation()}
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                    >
+                        <h2 id="product-batch-adjustment-title" className="text-lg font-bold text-slate-900">Adjust Batch Quantity</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Batch {adjustingBatch.batchNumber} currently has {Number(adjustingBatch.remainingQty ?? adjustingBatch.RemainingQty ?? 0)} units remaining.
+                        </p>
+                        <div className="mt-5 space-y-4">
+                            <Dropdown
+                                label="Adjustment type"
+                                required
+                                value={adjustmentType}
+                                onChange={setAdjustmentType}
+                                options={[
+                                    { value: 'In', label: 'In — add stock' },
+                                    { value: 'Out', label: 'Out — remove stock' }
+                                ]}
+                                className="w-full"
+                            />
+                            <label className="block space-y-1.5">
+                                <span className="text-xs font-bold text-slate-600">Quantity (units) <span className="text-red-500">*</span></span>
+                                <input
+                                    type="number"
+                                    min="0.0001"
+                                    step="0.0001"
+                                    required
+                                    autoFocus
+                                    value={adjustmentQuantity}
+                                    onChange={event => setAdjustmentQuantity(event.target.value)}
+                                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-indigo-400 focus:outline-none"
+                                />
+                            </label>
+                            <label className="block space-y-1.5">
+                                <span className="text-xs font-bold text-slate-600">Remark <span className="text-red-500">*</span></span>
+                                <textarea
+                                    value={adjustmentRemark}
+                                    onChange={event => setAdjustmentRemark(event.target.value)}
+                                    rows={2}
+                                    required
+                                    maxLength={500}
+                                    className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                                />
+                            </label>
+                            {adjustmentError && <p className="text-sm text-red-600">{adjustmentError}</p>}
+                        </div>
+                        <div className="mt-6 flex justify-end gap-2">
+                            <Button variant="secondary" onClick={() => setAdjustingBatch(null)} disabled={savingAdjustment}>Cancel</Button>
+                            <Button type="submit" disabled={savingAdjustment}>
+                                {savingAdjustment ? 'Saving…' : 'Save Adjustment'}
+                            </Button>
+                        </div>
+                    </form>
                 </div>
             )}
         </div>

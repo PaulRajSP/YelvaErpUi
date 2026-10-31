@@ -39,6 +39,9 @@ export default function NewProductionRequest() {
     const [loadingBatches, setLoadingBatches] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const getProductEdid = (product) =>
+        product?.edid ?? product?.Edid ?? product?.id ?? product?.Id ?? '';
+
     // Product search from API with current stock - only called when dropdown opens or user types
     const handleProductSearch = (term = '') => {
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -47,11 +50,12 @@ export default function NewProductionRequest() {
             try {
                 const res = await productApi.getProducts(1, 20, false, term ? term.trim() : '', true);
                 const items = res?.items || res?.Items || (Array.isArray(res) ? res : []);
-                const valid = items.filter(p => !p.isCombo);
+                const valid = items.filter(p => !(p.isCombo ?? p.IsCombo));
                 setFetchedProducts(valid);
                 setProductOptions(valid.map(p => ({
-                    value: p.edid || p.id,
-                    label: `${p.name}${p.sku ? ` (${p.sku})` : ''} - Stock: ${p.stock ?? 0} units`
+                    value: getProductEdid(p),
+                    label: `${p.name || p.Name}${p.sku || p.Sku ? ` (${p.sku || p.Sku})` : ''} - Stock: ${p.stock ?? p.Stock ?? 0} units`,
+                    product: p
                 })));
             } catch (err) {
                 console.error('Failed to search products:', err);
@@ -71,7 +75,7 @@ export default function NewProductionRequest() {
             setSelectedProductObj(null);
             return;
         }
-        const found = fetchedProducts.find(p => (p.edid || p.id) === formProductEdid);
+        const found = fetchedProducts.find(p => String(getProductEdid(p)) === String(formProductEdid));
         if (found) {
             setSelectedProductObj(found);
         }
@@ -80,8 +84,12 @@ export default function NewProductionRequest() {
     // Selected product reference
     const selectedFormProduct = useMemo(() => {
         if (!formProductEdid) return null;
-        return selectedProductObj || fetchedProducts.find(p => (p.edid || p.id) === formProductEdid) || null;
-    }, [formProductEdid, selectedProductObj, fetchedProducts]);
+        const selectedOption = productOptions.find(option => String(option.value) === String(formProductEdid));
+        return selectedProductObj ||
+            fetchedProducts.find(p => String(getProductEdid(p)) === String(formProductEdid)) ||
+            selectedOption?.product ||
+            { edid: formProductEdid, name: selectedOption?.label || 'Selected product' };
+    }, [formProductEdid, selectedProductObj, fetchedProducts, productOptions]);
 
     // When product changes, fetch recipe and batches for each raw material
     useEffect(() => {
@@ -417,8 +425,12 @@ export default function NewProductionRequest() {
                                 value={formProductEdid}
                                 onChange={(val) => {
                                     setFormProductEdid(val);
-                                    const found = fetchedProducts.find(p => (p.edid || p.id) === val);
-                                    if (found) setSelectedProductObj(found);
+                                    const found = fetchedProducts.find(p => String(getProductEdid(p)) === String(val));
+                                    const selectedOption = productOptions.find(option => String(option.value) === String(val));
+                                    setSelectedProductObj(found || selectedOption?.product || {
+                                        edid: val,
+                                        name: selectedOption?.label || 'Selected product'
+                                    });
                                 }}
                                 options={productOptions}
                                 searchable={true}
@@ -432,14 +444,14 @@ export default function NewProductionRequest() {
                             {selectedFormProduct ? (
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <p className="font-bold text-slate-900 text-sm">{selectedFormProduct.name}</p>
+                                        <p className="font-bold text-slate-900 text-sm">{selectedFormProduct.name || selectedFormProduct.Name || 'Selected product'}</p>
                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700">
-                                            {selectedFormProduct.category || 'Product'}
+                                            {selectedFormProduct.category || selectedFormProduct.Category || 'Product'}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
-                                        {selectedFormProduct.sku && <span>SKU: {selectedFormProduct.sku}</span>}
-                                        <span>Warehouse Stock: <strong className="text-slate-800">{selectedFormProduct.stock ?? 0} units</strong></span>
+                                        {(selectedFormProduct.sku || selectedFormProduct.Sku) && <span>SKU: {selectedFormProduct.sku || selectedFormProduct.Sku}</span>}
+                                        <span>Warehouse Stock: <strong className="text-slate-800">{selectedFormProduct.stock ?? selectedFormProduct.Stock ?? 0} units</strong></span>
                                     </div>
                                 </div>
                             ) : (

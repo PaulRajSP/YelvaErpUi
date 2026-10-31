@@ -5,7 +5,7 @@ import { productApi } from '../../api/productApi';
 export default function SingleProductModal({ isOpen, onClose, editingProduct, onSave }) {
     const [productForm, setProductForm] = useState({
         name: '',
-        qty: '1',
+        qty: '',
         sku: '',
         qrCode: '',
         mrpDirect: '',
@@ -23,7 +23,7 @@ export default function SingleProductModal({ isOpen, onClose, editingProduct, on
             if (editingProduct) {
                 setProductForm({
                     name: editingProduct.name || '',
-                    qty: editingProduct.qty || '1',
+                    qty: editingProduct.qty ?? '',
                     sku: editingProduct.sku || '',
                     qrCode: editingProduct.qrCode || editingProduct.sku || '',
                     mrpDirect: editingProduct.mrps?.DIRECT || editingProduct.mrp || '',
@@ -38,7 +38,7 @@ export default function SingleProductModal({ isOpen, onClose, editingProduct, on
             } else {
                 setProductForm({
                     name: '',
-                    qty: '1',
+                    qty: '',
                     sku: '',
                     qrCode: '',
                     mrpDirect: '',
@@ -59,7 +59,7 @@ export default function SingleProductModal({ isOpen, onClose, editingProduct, on
 
         const productData = {
             name: productForm.name,
-            qty: parseFloat(productForm.qty) || 1,
+            qty: Number(productForm.qty),
             isCombo: false,
             qrCode: productForm.qrCode || productForm.sku || '',
             comboItems: [],

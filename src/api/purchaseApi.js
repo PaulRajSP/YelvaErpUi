@@ -56,6 +56,12 @@ export const purchaseApi = {
     getBatchById: (batchEdid) =>
         apiFetch(`batches/${batchEdid}`),
 
+    adjustMaterialBatch: (batchEdid, adjustment) =>
+        apiFetch(`batches/${batchEdid}/adjustment`, 'PATCH', adjustment),
+
+    closeMaterialBatch: (batchEdid) =>
+        apiFetch(`batches/${batchEdid}/close`, 'PATCH'),
+
     /** POST paginated raw materials */
     getRawMaterials: (pageNumber = 1, pageSize = PAGE_SIZE, searchKeyword = null, category = null, status = null) =>
         apiFetch('raw-materials/list', 'POST', {

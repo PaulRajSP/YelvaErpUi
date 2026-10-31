@@ -42,6 +42,18 @@ body {
   @apply bg-[#f4f7f6] text-slate-800 antialiased selection:bg-brand-yellow/30 selection:text-slate-900;
 }
 
+/* Render text badges as plain colored text throughout the app. */
+span[class*="rounded-full"][class*="text-"],
+span[class*="rounded-md"][class*="text-"][class*="bg-"],
+span[class~="rounded"][class*="text-"][class*="bg-"] {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 button, [role="button"], input[type="submit"], input[type="button"], label.cursor-pointer {
   cursor: pointer;
 }

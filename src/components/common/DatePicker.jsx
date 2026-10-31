@@ -24,7 +24,8 @@ export default function DatePicker({
     error,
     required = false,
     disabled = false,
-    align = 'auto'
+    align = 'auto',
+    maxDate
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [openRight, setOpenRight] = useState(align === 'right');
@@ -33,6 +34,8 @@ export default function DatePicker({
     // Safely parse the incoming date string
     const parsedDate = value ? (typeof value === 'string' ? parseISO(value) : new Date(value)) : null;
     const initialDate = parsedDate && isValid(parsedDate) ? parsedDate : new Date();
+    const parsedMaxDate = maxDate ? (typeof maxDate === 'string' ? parseISO(maxDate) : new Date(maxDate)) : null;
+    const validMaxDate = parsedMaxDate && isValid(parsedMaxDate) ? parsedMaxDate : null;
 
     const [currentMonth, setCurrentMonth] = useState(initialDate);
     const wrapperRef = useRef(null);
@@ -104,18 +107,22 @@ export default function DatePicker({
                 const cloneDay = day;
                 const isSelected = parsedDate && isValid(parsedDate) && isSameDay(day, parsedDate);
                 const isCurrentMonth = isSameMonth(day, monthStart);
+                const isAfterMaxDate = validMaxDate && day > validMaxDate;
+                const isDisabled = !isCurrentMonth || isAfterMaxDate;
 
                 days.push(
                     <button
                         type="button"
                         key={day.toString()}
+                        disabled={isDisabled}
                         onClick={() => {
+                            if (isDisabled) return;
                             onChange(format(cloneDay, 'yyyy-MM-dd'));
                             setIsOpen(false);
                         }}
                                 className={`
-                                    aspect-square flex items-center justify-center text-xs font-bold rounded-lg transition-all cursor-pointer
-                                    ${!isCurrentMonth ? "text-slate-300 pointer-events-none opacity-50" : "text-slate-700 hover:bg-slate-100"}
+                                    aspect-square flex items-center justify-center text-xs font-bold rounded-lg transition-all
+                                    ${isDisabled ? "text-slate-300 cursor-not-allowed opacity-50" : "text-slate-700 hover:bg-slate-100 cursor-pointer"}
                                     ${isSelected ? "bg-slate-900 text-white hover:bg-slate-800" : ""}
                                 `}
                     >

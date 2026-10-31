@@ -87,4 +87,12 @@ export const productApi = {
     /** POST get product batch usage history */
     getProductUsageHistory: (productEdid, batchEdid, searchRemark = '') =>
         apiFetch(`products/${productEdid}/usage-history/${batchEdid}`, 'POST', { searchRemark: searchRemark || '' }),
+
+    /** PATCH adjust product batch quantity and record a movement */
+    adjustProductBatch: (productEdid, batchEdid, adjustment) =>
+        apiFetch(`products/${productEdid}/batches/${batchEdid}/adjustment`, 'PATCH', adjustment),
+
+    /** PATCH close an empty product batch */
+    closeProductBatch: (productEdid, batchEdid) =>
+        apiFetch(`products/${productEdid}/batches/${batchEdid}/close`, 'PATCH'),
 };

@@ -24,6 +24,15 @@ export const commonApi = {
         return typesCache.get(typeClass);
     },
 
+    getShelfLifeOptions: async () => {
+        const response = await commonApi.getTypes('ShelfLifeMonths');
+        const months = response?.items || response?.Items || [];
+        return months.map(value => ({
+            value: String(value),
+            label: `${value} months`
+        }));
+    },
+
     /** Evict a specific typeClass or all types from cache if manual refresh is needed */
     clearTypesCache: (typeClass) => {
         if (typeClass) {

@@ -70,8 +70,6 @@ function isCacheableRead(method, endpoint) {
         path === 'products/customer-products' ||
         path.endsWith('/price-history') ||
         path.endsWith('/used-in-combos') ||
-        path.endsWith('/batch-list') ||
-        path.includes('/usage-history/') ||
         path.includes('/purchase-history') ||
         path === 'purchases/supplier' ||
         path === 'purchases/items' ||
