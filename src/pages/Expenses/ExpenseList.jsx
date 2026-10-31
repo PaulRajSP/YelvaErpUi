@@ -12,8 +12,8 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Pagination } from '../../components/ui/Pagination';
+import DatePicker from '../../components/common/DatePicker';
 import DateRangePicker from '../../components/common/DateRangePicker';
-import ExpenseReceiptModal from '../../components/expenses/ExpenseReceiptModal';
 import UploadedDocumentButton from '../../components/common/UploadedDocumentButton';
 import { expenseApi } from '../../api/expenseApi';
 import { commonApi } from '../../api/commonApi';
@@ -76,9 +76,6 @@ export default function ExpenseList() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [expenseToDelete, setExpenseToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
-
-    // View Receipt popup modal
-    const [viewingReceiptExpense, setViewingReceiptExpense] = useState(null);
 
     // Form fields
     const [formData, setFormData] = useState({
@@ -286,6 +283,11 @@ export default function ExpenseList() {
             return;
         }
 
+        if (!formData.expenseDate) {
+            setFormError('Please select the expense date.');
+            return;
+        }
+
         setFormSubmitting(true);
         try {
             // Note: recordedBy is dynamically sourced from currentUser without hardcoding defaults
@@ -359,10 +361,6 @@ export default function ExpenseList() {
     };
 
     // View attached bill receipt in popup modal
-    const handleOpenReceipt = (expense) => {
-        setViewingReceiptExpense(expense);
-    };
-
     return (
         <div className="space-y-6">
             {/* PAGE HEADER */}
@@ -646,14 +644,17 @@ export default function ExpenseList() {
 
                                         {/* Receipt Attachment */}
                                         <TableCell className="text-center text-sm">
-                                            {item.attachmentData?.length > 0 ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleOpenReceipt(item)}
-                                                    className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                                                >
-                                                    View Bill
-                                                </button>
+                                            {Array.isArray(item.attachmentData) && item.attachmentData.length > 0 ? (
+                                                <div className="flex justify-center items-center gap-1">
+                                                    {item.attachmentData.map((attachment, index) => (
+                                                        <UploadedDocumentButton
+                                                            key={attachment.attachmentEdid || attachment.documentEdid || attachment.edid || index}
+                                                            attachment={attachment}
+                                                            title={`Receipt ${index + 1}`}
+                                                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                                        />
+                                                    ))}
+                                                </div>
                                             ) : (
                                                 <span className="text-slate-400">-</span>
                                             )}
@@ -662,15 +663,6 @@ export default function ExpenseList() {
                                         {/* Actions */}
                                         <TableCell className="text-center text-sm text-slate-700">
                                             <div className="flex justify-center items-center gap-1">
-                                                {item.attachmentData?.length > 0 && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        icon={FileText}
-                                                        onClick={() => handleOpenReceipt(item)}
-                                                        title="View Bill Receipt"
-                                                    />
-                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -762,12 +754,12 @@ export default function ExpenseList() {
 
                         {/* Expense Date */}
                         <div>
-                            <Input
+                            <DatePicker
                                 label="Expense Date"
-                                type="date"
-                                value={formData.expenseDate}
-                                onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
                                 required
+                                value={formData.expenseDate}
+                                onChange={(value) => setFormData({ ...formData, expenseDate: value })}
+                                className="w-full"
                             />
                         </div>
 
@@ -919,12 +911,6 @@ export default function ExpenseList() {
                 </div>
             </Modal>
 
-            {/* EXPENSE RECEIPT POPUP COMPONENT */}
-            <ExpenseReceiptModal
-                isOpen={Boolean(viewingReceiptExpense)}
-                onClose={() => setViewingReceiptExpense(null)}
-                expense={viewingReceiptExpense}
-            />
         </div>
     );
 }
