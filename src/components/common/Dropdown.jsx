@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { formatOrderStatus } from '../../common/utils';
 
@@ -37,12 +38,15 @@ export const Dropdown = forwardRef(({
     onSearchChange,
     onOpen,
     fallbackLabel,
-    isDefault = false
+    isDefault = false,
+    menuPlacement = 'auto'
 }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [openUpwards, setOpenUpwards] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [menuPosition, setMenuPosition] = useState(null);
     const dropdownRef = useRef(null);
+    const menuRef = useRef(null);
 
     // Locate the raw "All" option (if any) so we can use it as the default value
     const allOptRaw = options.find(isAllOption);
@@ -104,7 +108,9 @@ export const Dropdown = forwardRef(({
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+            const clickedOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(e.target);
+            const clickedOutsideMenu = menuRef.current && !menuRef.current.contains(e.target);
+            if (clickedOutsideDropdown && clickedOutsideMenu) {
                 setIsOpen(false);
             }
         };
@@ -116,11 +122,42 @@ export const Dropdown = forwardRef(({
         if (!isOpen) setSearchTerm('');
     }, [isOpen]);
 
+    const updateMenuPosition = () => {
+        if (!dropdownRef.current) return;
+        const rect = dropdownRef.current.getBoundingClientRect();
+        setMenuPosition({
+            left: rect.left,
+            top: rect.bottom + 4,
+            width: rect.width,
+            maxHeight: Math.max(0, window.innerHeight - rect.bottom - 8)
+        });
+    };
+
+    useEffect(() => {
+        if (!isOpen || menuPlacement !== 'down') return undefined;
+
+        updateMenuPosition();
+        window.addEventListener('resize', updateMenuPosition);
+        document.addEventListener('scroll', updateMenuPosition, true);
+        return () => {
+            window.removeEventListener('resize', updateMenuPosition);
+            document.removeEventListener('scroll', updateMenuPosition, true);
+        };
+    }, [isOpen, menuPlacement]);
+
     const toggleDropdown = () => {
         if (disabled) return;
 
         if (!isOpen && dropdownRef.current) {
             const rect = dropdownRef.current.getBoundingClientRect();
+            if (menuPlacement === 'down') {
+                setMenuPosition({
+                    left: rect.left,
+                    top: rect.bottom + 4,
+                    width: rect.width,
+                    maxHeight: Math.max(0, window.innerHeight - rect.bottom - 8)
+                });
+            }
             let scrollContainer = dropdownRef.current.parentElement;
             while (scrollContainer && scrollContainer !== document.body) {
                 const overflowY = window.getComputedStyle(scrollContainer).overflowY;
@@ -133,7 +170,10 @@ export const Dropdown = forwardRef(({
                 : { top: 0, bottom: window.innerHeight };
             const spaceBelow = Math.min(window.innerHeight, containerBounds.bottom) - rect.bottom;
             const spaceAbove = rect.top - Math.max(0, containerBounds.top);
-            setOpenUpwards(spaceBelow < 250 && spaceAbove > spaceBelow);
+            setOpenUpwards(
+                menuPlacement === 'up' ||
+                (menuPlacement === 'auto' && spaceBelow < 250 && spaceAbove > spaceBelow)
+            );
             if (onOpen) onOpen();
         }
 
@@ -144,6 +184,80 @@ export const Dropdown = forwardRef(({
         onChange(val);
         setIsOpen(false);
     };
+
+    const menu = isOpen && (
+        <div
+            ref={menuRef}
+            style={menuPlacement === 'down' ? {
+                position: 'fixed',
+                left: menuPosition?.left ?? 0,
+                top: menuPosition?.top ?? 0,
+                width: menuPosition?.width ?? '100%',
+                maxHeight: menuPosition?.maxHeight ?? 240,
+                zIndex: 1000
+            } : undefined}
+            className={`${menuPlacement === 'down' ? 'fixed' : `absolute left-0 ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`} z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 flex flex-col overflow-hidden`}
+        >
+            {searchable && (
+                <div className="p-2 border-b border-slate-100 shrink-0">
+                    <div className="relative">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <input
+                            type="text"
+                            autoFocus
+                            autoComplete="off"
+                            placeholder={searchPlaceholder}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-7 pr-3 py-1.5 text-xs font-medium outline-none focus:border-indigo-400 focus:bg-white transition-colors"
+                            value={searchTerm}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                if (onSearchChange) onSearchChange(e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                </div>
+            )}
+            <div className="overflow-y-auto">
+                {filteredOptions.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-slate-400 text-center font-medium">No results found</div>
+                ) : (
+                    filteredOptions.map((opt) => {
+                        const isSelected = selected ? selected.value === opt.value : value === opt.value;
+                        const isDisabled = Boolean(opt.disabled);
+                        return (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                disabled={isDisabled}
+                                onClick={() => !isDisabled && handleSelect(opt.value)}
+                                className={`w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                                    isDisabled
+                                        ? 'opacity-40 cursor-not-allowed bg-slate-50 text-slate-400 select-none'
+                                        : isSelected
+                                            ? 'bg-slate-100 text-slate-900 font-medium cursor-pointer'
+                                            : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
+                                }`}
+                            >
+                                <span className="truncate">{opt.label}</span>
+                                {isSelected && <Check size={14} className="text-slate-900 shrink-0" />}
+                            </button>
+                        );
+                    })
+                )}
+
+                {onAddNew && (
+                    <button
+                        type="button"
+                        onClick={() => { setIsOpen(false); onAddNew(); }}
+                        className="w-full cursor-pointer text-left px-3 py-2 text-sm text-slate-900 font-semibold border-t border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-between mt-1"
+                    >
+                        {addNewLabel}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className={`space-y-1.5 ${containerClassName}`} ref={ref}>
@@ -178,72 +292,9 @@ export const Dropdown = forwardRef(({
                     />
                 </button>
 
-                {isOpen && (
-                    <div
-                        className={`absolute left-0 z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 flex flex-col ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'
-                            }`}
-                    >
-                        {searchable && (
-                            <div className="p-2 border-b border-slate-100 shrink-0">
-                                <div className="relative">
-                                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                    <input
-                                        type="text"
-                                        autoFocus
-                                        autoComplete="off"
-                                        placeholder={searchPlaceholder}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-7 pr-3 py-1.5 text-xs font-medium outline-none focus:border-indigo-400 focus:bg-white transition-colors"
-                                        value={searchTerm}
-                                        onChange={(e) => {
-                                            setSearchTerm(e.target.value);
-                                            if (onSearchChange) onSearchChange(e.target.value);
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        <div className="overflow-y-auto">
-                            {filteredOptions.length === 0 ? (
-                                <div className="px-3 py-3 text-sm text-slate-400 text-center font-medium">No results found</div>
-                            ) : (
-                                filteredOptions.map((opt) => {
-                                    const isSelected = selected ? selected.value === opt.value : value === opt.value;
-                                    const isDisabled = Boolean(opt.disabled);
-                                    return (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            disabled={isDisabled}
-                                            onClick={() => !isDisabled && handleSelect(opt.value)}
-                                            className={`w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                                                isDisabled
-                                                    ? 'opacity-40 cursor-not-allowed bg-slate-50 text-slate-400 select-none'
-                                                    : isSelected
-                                                        ? 'bg-slate-100 text-slate-900 font-medium cursor-pointer'
-                                                        : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
-                                            }`}
-                                        >
-                                            <span className="truncate">{opt.label}</span>
-                                            {isSelected && <Check size={14} className="text-slate-900 shrink-0" />}
-                                        </button>
-                                    );
-                                })
-                            )}
-
-                            {onAddNew && (
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsOpen(false); onAddNew(); }}
-                                    className="w-full cursor-pointer text-left px-3 py-2 text-sm text-slate-900 font-semibold border-t border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-between mt-1"
-                                >
-                                    {addNewLabel}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
+                {menuPlacement !== 'down' && menu}
             </div>
+            {menuPlacement === 'down' && menu && createPortal(menu, document.body)}
             {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
         </div>
     );

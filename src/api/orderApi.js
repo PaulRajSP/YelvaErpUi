@@ -14,16 +14,21 @@ export const orderApi = {
         }),
 
     /** GET full order details by orderNumber (and optional orderEdid) */
-    getOrderDetail: (orderNumber, orderEdid) =>
-        apiFetch(orderEdid && orderEdid !== orderNumber ? `orders/${orderNumber}/${orderEdid}` : `orders/${encodeURIComponent((orderNumber || '').trim())}/details`),
+    getOrderDetail: (orderNumber, orderEdid, options = {}) =>
+        apiFetch(
+            orderEdid && orderEdid !== orderNumber ? `orders/${orderNumber}/${orderEdid}` : `orders/${encodeURIComponent((orderNumber || '').trim())}/details`,
+            'GET',
+            null,
+            options
+        ),
 
     /** GET order details by orderNumber only */
-    getOrderByNumber: (orderNumber) =>
-        apiFetch(`orders/${encodeURIComponent(orderNumber.trim())}/details`),
+    getOrderByNumber: (orderNumber, options = {}) =>
+        apiFetch(`orders/${encodeURIComponent(orderNumber.trim())}/details`, 'GET', null, options),
 
     /** GET single order by id */
-    getOrderById: (orderId) =>
-        apiFetch(`orders/${orderId}`),
+    getOrderById: (orderId, options = {}) =>
+        apiFetch(`orders/${orderId}`, 'GET', null, options),
 
     /** GET items for a specific order */
     getOrderItems: (orderId) =>
@@ -38,8 +43,8 @@ export const orderApi = {
         apiFetch(`orders/${orderId}/status`, 'PATCH', typeof payload === 'string' ? { status: payload } : payload),
 
     /** GET separate status tracking history */
-    getOrderTracking: (orderEdid) =>
-        apiFetch(`orders/${encodeURIComponent((orderEdid || '').trim())}/tracking`),
+    getOrderTracking: (orderEdid, options = {}) =>
+        apiFetch(`orders/${encodeURIComponent((orderEdid || '').trim())}/tracking`, 'GET', null, options),
 
     /** GET comments for a specific order */
     getOrderComments: (orderEdid) =>
@@ -66,8 +71,8 @@ export const orderApi = {
         apiFetch(`orders/payments/${paymentEdid}`, 'DELETE'),
 
     /** POST confirm order and generate physical bottle records in OrderProductItem */
-    confirmOrder: (orderEdid) =>
-        apiFetch(`orders/${orderEdid}/confirm`, 'POST'),
+    confirmOrder: (orderEdid, payload = {}) =>
+        apiFetch(`orders/${orderEdid}/confirm`, 'POST', payload),
 
     /** GET packing details for an order by order number only */
     getPackingDetails: (orderNumber) =>
@@ -98,6 +103,4 @@ export const orderApi = {
             searchKeyword: filters.searchKeyword || null
         }),
 };
-
-
 

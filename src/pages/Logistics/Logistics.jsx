@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
-    Truck, Search, Package, MapPin, User, Calendar, CheckCircle, ArrowRight,
-    Upload, X, Loader2, Eye, Download, DollarSign, Filter, ChevronLeft, ChevronRight, RefreshCw
+    Truck, Search, Package, CheckCircle, X, Loader2, Eye, RefreshCw, Upload
 } from 'lucide-react';
 import { orderApi } from '../../api/orderApi';
 import { commonApi } from '../../api/commonApi';
-import { courierApi } from '../../api/courierApi';
-import Dropdown from '../../components/common/Dropdown';
 import PageHeader from '../../components/common/PageHeader';
-import { formatDate, formatTime, formatDateTime, PAGE_SIZE } from '../../common/utils';
-import { useStore } from '../../context/StoreContext';
+import { formatDateTime, PAGE_SIZE } from '../../common/utils';
 import { Card } from '../../components/ui/Card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../../components/ui/Table';
 import { Tooltip } from '../../components/ui/Tooltip';
@@ -23,8 +19,6 @@ export default function Logistics() {
     const navigate = useNavigate();
     const location = useLocation();
     const [searchParams] = useSearchParams();
-    const { currentUser } = useStore();
-
     const incomingOrderNumber = (
         location.state?.orderNumber ||
         location.state?.orderNo ||
@@ -69,57 +63,11 @@ export default function Logistics() {
 
     // Dispatch Modal State
     const [selectedOrder, setSelectedOrder] = useState(null);
-    const [courierOptions, setCourierOptions] = useState([]);
-    const [courier, setCourier] = useState('');
     const [trackingNumber, setTrackingNumber] = useState('');
-    const [courierCharge, setCourierCharge] = useState('');
     const [slipAttachments, setSlipAttachments] = useState([]);
     const [uploadingSlip, setUploadingSlip] = useState(false);
     const [submittingDispatch, setSubmittingDispatch] = useState(false);
     const [dispatchError, setDispatchError] = useState(null);
-
-    // Fetch Couriers from DB (active couriers for dispatch selection)
-    const courierRequestId = useRef(0);
-    const courierSearchTimeout = useRef(null);
-
-    const loadCouriers = useCallback(async (search = '') => {
-        const reqId = ++courierRequestId.current;
-        try {
-            const res = await courierApi.getCouriers({
-                onlyActive: true,
-                searchText: search ? search.trim() : null,
-                pageSize: 100
-            });
-            if (reqId !== courierRequestId.current) return;
-            const items = res?.data?.items || res?.items || (Array.isArray(res) ? res : []);
-            if (Array.isArray(items)) {
-                const activeItems = items.filter(c => c.isActive === true);
-                const dbOptions = activeItems.map(c => ({
-                    value: c.name,
-                    id: c.id,
-                    edid: c.edid,
-                    metadata: c.metadata || [],
-                    label: c.name + (c.mobile ? ` (${c.mobile})` : '')
-                }));
-                setCourierOptions(dbOptions);
-                setCourier(prev => prev || (dbOptions.length > 0 ? dbOptions[0].value : ''));
-            }
-        } catch (err) {
-            if (reqId !== courierRequestId.current) return;
-            console.error('Failed to load couriers from API:', err);
-        }
-    }, []);
-
-    const handleCourierSearchChange = useCallback((text) => {
-        if (courierSearchTimeout.current) clearTimeout(courierSearchTimeout.current);
-        courierSearchTimeout.current = setTimeout(() => {
-            loadCouriers(text);
-        }, 300);
-    }, [loadCouriers]);
-
-    useEffect(() => {
-        loadCouriers();
-    }, [loadCouriers]);
 
     // Fetch queue in background
     const fetchQueue = useCallback(async () => {
@@ -162,28 +110,31 @@ export default function Logistics() {
         fetchQueue();
     }, [fetchQueue]);
 
-    // File Upload Handler
     const handleFileUpload = async (e) => {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
         setUploadingSlip(true);
+        setDispatchError(null);
         try {
             const uploaded = await Promise.all(files.map(async file => {
                 const res = await commonApi.uploadAttachment(file);
                 const data = res?.data || res;
                 const attachmentEdid = data?.documentEdid || data?.edid || data?.attachmentEdid;
-                return attachmentEdid ? {
+                if (!attachmentEdid) {
+                    throw new Error(`Failed to upload ${file.name}: the server did not return a document ID.`);
+                }
+                return {
                     attachmentEdid,
                     attachmentOriginalName: data?.documentOriginalName || file.name,
                     attachmentType: 'CourierSlip',
                     remarks: ''
-                } : null;
+                };
             }));
-            setSlipAttachments(prev => [...prev, ...uploaded.filter(Boolean)]);
+            setSlipAttachments(prev => [...prev, ...uploaded]);
         } catch (err) {
-            console.error('Failed to upload slip document:', err);
-            alert('Failed to upload courier slip. Please try again.');
+            console.error('Failed to upload courier documents:', err);
+            setDispatchError(err.message || 'Failed to upload courier document. Please try again.');
         } finally {
             setUploadingSlip(false);
             e.target.value = '';
@@ -193,23 +144,15 @@ export default function Logistics() {
     // Open Dispatch Modal
     const handleOpenDispatch = (order) => {
         setSelectedOrder(order);
-        setCourier(order?.courier || courierOptions[0]?.value || '');
         setTrackingNumber('');
-        setCourierCharge('');
         setSlipAttachments([]);
         setDispatchError(null);
-        loadCouriers(''); // fetch fresh list from API without caching
     };
 
     // Submit Dispatch
     const handleSubmitDispatch = async (e) => {
         e.preventDefault();
         if (!selectedOrder) return;
-
-        if (!courier) {
-            setDispatchError('Please specify the courier service.');
-            return;
-        }
 
         if (!trackingNumber.trim()) {
             setDispatchError('Please enter tracking / AWB number.');
@@ -220,19 +163,15 @@ export default function Logistics() {
         setDispatchError(null);
 
         try {
-            const matchedCourier = courierOptions.find(o => o.value === courier);
             const payload = {
                 orderEdid: selectedOrder.edid || selectedOrder.id,
-                courier: courier,
-                courierId: matchedCourier?.id || null,
-                courierEdid: matchedCourier?.edid || null,
                 tracking: trackingNumber.trim(),
                 trackingNumber: trackingNumber.trim(),
-                courierCharge: courierCharge ? parseFloat(courierCharge) : null,
-                attachmentData: slipAttachments.map(({ attachmentEdid, attachmentType, remarks }) => ({ attachmentEdid, attachmentType, remarks })),
-                totalWeight: selectedOrder?.package?.weight ? parseFloat(selectedOrder.package.weight) : null,
-                handedOverBy: currentUser?.employeeCode || 'EMP001',
-                handedOverAt: new Date().toISOString()
+                attachmentData: slipAttachments.map(({ attachmentEdid, attachmentType, remarks }) => ({
+                    attachmentEdid,
+                    attachmentType,
+                    remarks
+                }))
             };
 
             await orderApi.dispatchOrder(payload);
@@ -258,7 +197,7 @@ export default function Logistics() {
                         <span>Logistics Station</span>
                     </div>
                 }
-                subtitle="Manage courier dispatches, record tracking numbers, upload postal slips, and track courier charges."
+                subtitle="Manage courier dispatches and track delivery status."
                 rightContent={
                     <div className="flex items-center gap-2">
                         <button
@@ -439,7 +378,7 @@ export default function Logistics() {
                                         Dispatch Order #{selectedOrder.orderNumber}
                                     </h3>
                                     <p className="text-[11px] text-slate-500">
-                                        Record courier booking details and upload postal slip.
+                                        Enter the tracking / AWB number to dispatch this order.
                                     </p>
                                 </div>
                             </div>
@@ -459,24 +398,6 @@ export default function Logistics() {
                                 </div>
                             )}
 
-                            {/* Courier Selection */}
-                            <div>
-                                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                                    Courier Service / Provider <span className="text-rose-500">*</span>
-                                </label>
-                                <Dropdown
-                                    value={courier}
-                                    onChange={setCourier}
-                                    options={courierOptions}
-                                    placeholder="Select courier..."
-                                    searchable={true}
-                                    searchPlaceholder="Search courier..."
-                                    onSearchChange={handleCourierSearchChange}
-                                    onOpen={() => loadCouriers('')}
-                                    className="w-full text-xs"
-                                />
-                            </div>
-
                             {/* Tracking / AWB Number */}
                             <div>
                                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -492,63 +413,48 @@ export default function Logistics() {
                                 />
                             </div>
 
-                            {/* Courier Charge Given to Team */}
                             <div>
                                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                                    Courier Charge Given to Courier/Post Team (₹)
-                                </label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={courierCharge}
-                                        onChange={(e) => setCourierCharge(e.target.value)}
-                                        placeholder="Amount given (e.g. 70)"
-                                        className="w-full h-10 pl-7 pr-3 bg-white border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-slate-800 outline-none transition-all"
-                                    />
-                                </div>
-                                <p className="text-[10px] text-slate-400 mt-1">Record the exact courier fee paid at the post or courier counter.</p>
-                            </div>
-
-                            {/* Upload Courier Slip Document */}
-                            <div>
-                                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                                    Courier Slip Document / Photo
+                                    Courier Document / Slip
                                 </label>
                                 {slipAttachments.map((attachment, index) => (
                                     <div key={attachment.attachmentEdid} className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs mb-2">
-                                        <div className="flex items-center gap-2 text-blue-900 font-semibold truncate">
-                                            <span className="truncate">{attachment.attachmentOriginalName}</span>
-                                        </div>
+                                        <span className="truncate text-blue-900 font-semibold">
+                                            {attachment.attachmentOriginalName}
+                                        </span>
                                         <div className="flex items-center gap-1 shrink-0">
                                             <UploadedDocumentButton attachment={attachment} className="p-1 text-blue-700 hover:bg-blue-100 rounded-lg" />
-                                            <button type="button" onClick={() => setSlipAttachments(prev => prev.filter((_, i) => i !== index))} className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer">Remove</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSlipAttachments(prev => prev.filter((_, itemIndex) => itemIndex !== index))}
+                                                className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer"
+                                            >
+                                                Remove
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
-                                {
-                                    <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 p-4 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors">
-                                        <input
-                                            type="file"
-                                            multiple
-                                            accept="image/*,.pdf"
-                                            onChange={handleFileUpload}
-                                            className="hidden"
-                                        />
-                                        {uploadingSlip ? (
-                                            <div className="flex items-center gap-2 text-xs text-blue-600 font-bold">
-                                                <Loader2 size={16} className="animate-spin" /> Uploading slip...
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <Upload size={18} className="text-slate-400" />
-                                                <span className="text-xs font-bold text-slate-700">Click to upload courier slip</span>
-                                                <span className="text-[10px] text-slate-400">PNG, JPG, PDF up to 10MB</span>
-                                            </>
-                                        )}
-                                    </label>
-                                }
+                                <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 p-4 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors">
+                                    <input
+                                        type="file"
+                                        multiple
+                                        accept="image/*,.pdf"
+                                        onChange={handleFileUpload}
+                                        className="hidden"
+                                        disabled={uploadingSlip || submittingDispatch}
+                                    />
+                                    {uploadingSlip ? (
+                                        <div className="flex items-center gap-2 text-xs text-blue-600 font-bold">
+                                            <Loader2 size={16} className="animate-spin" /> Uploading document...
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <Upload size={18} className="text-slate-400" />
+                                            <span className="text-xs font-bold text-slate-700">Click to upload document</span>
+                                            <span className="text-[10px] text-slate-400">PNG, JPG, PDF up to 10MB</span>
+                                        </>
+                                    )}
+                                </label>
                             </div>
 
                             {/* Modal Actions */}

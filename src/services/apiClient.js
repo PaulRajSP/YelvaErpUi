@@ -180,12 +180,12 @@ function clearApiCache() {
  * @param {object|null} body - request body (will be JSON-serialised)
  * @returns {Promise<any>}   - the `data` field of the response, or throws on error
  */
-export async function apiFetch(endpoint, method = 'GET', body = null) {
+export async function apiFetch(endpoint, method = 'GET', body = null, { forceRefresh = false } = {}) {
     const upperMethod = method.toUpperCase();
     const isExternal = endpoint.startsWith('http://') || endpoint.startsWith('https://');
     const isRead = isCacheableRead(upperMethod, endpoint);
     const cacheKey = isRead && !isExternal ? getCacheKey(upperMethod, endpoint, body) : null;
-    const cachedEntry = cacheKey ? readCachedResponse(cacheKey) : null;
+    const cachedEntry = cacheKey && !forceRefresh ? readCachedResponse(cacheKey) : null;
     const reqKey = cacheKey;
 
     if (reqKey && inFlightRequests.has(reqKey)) {

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { orderApi } from '../../api/orderApi';
+import { courierApi } from '../../api/courierApi';
 import { commonApi } from '../../api/commonApi';
 import { API_BASE } from '../../services/apiClient';
 import {
@@ -14,6 +15,7 @@ import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
+import Dropdown from '../../components/common/Dropdown';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../../components/ui/Table';
 import { formatDate, formatTime, formatDateTime, formatOrderStatus } from '../../common/utils';
 import RecordPaymentModal from '../../components/orders/RecordPaymentModal';
@@ -85,7 +87,16 @@ export default function OrderDetails() {
     const [printDocType, setPrintDocType] = useState('invoice');
     const [refreshCounter, setRefreshCounter] = useState(0);
     const [confirmingOrder, setConfirmingOrder] = useState(false);
+    const [updatingStatus, setUpdatingStatus] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [confirmCourierOptions, setConfirmCourierOptions] = useState([]);
+    const [selectedConfirmCourier, setSelectedConfirmCourier] = useState('');
+    const [selectedConfirmCourierLabel, setSelectedConfirmCourierLabel] = useState('');
+    const [loadingConfirmCouriers, setLoadingConfirmCouriers] = useState(false);
+    const [searchingConfirmCouriers, setSearchingConfirmCouriers] = useState(false);
+    const [confirmCourierError, setConfirmCourierError] = useState('');
+    const confirmCourierSearchTimeout = useRef(null);
+    const confirmCourierSearchRequestId = useRef(0);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [cancelRemark, setCancelRemark] = useState('');
     const [cancellingOrder, setCancellingOrder] = useState(false);
@@ -100,16 +111,106 @@ export default function OrderDetails() {
 
     const reloadOrder = () => setRefreshCounter(c => c + 1);
 
+    useEffect(() => () => {
+        if (confirmCourierSearchTimeout.current) {
+            clearTimeout(confirmCourierSearchTimeout.current);
+        }
+    }, []);
+
+    const handleConfirmCourierSearchChange = (searchText) => {
+        if (confirmCourierSearchTimeout.current) {
+            clearTimeout(confirmCourierSearchTimeout.current);
+        }
+
+        const requestId = ++confirmCourierSearchRequestId.current;
+        setSearchingConfirmCouriers(true);
+        setConfirmCourierError('');
+        confirmCourierSearchTimeout.current = setTimeout(async () => {
+            try {
+                const res = await courierApi.getCouriers({
+                    onlyActive: true,
+                    searchText,
+                    pageSize: 100
+                });
+                if (requestId !== confirmCourierSearchRequestId.current) return;
+
+                const items = res?.data?.items || res?.items || [];
+                const activeCouriers = Array.isArray(items)
+                    ? items.filter(courier => courier.isActive === true)
+                    : [];
+                setConfirmCourierOptions(activeCouriers.map(courier => ({
+                    edid: courier.edid,
+                    value: courier.edid,
+                    label: courier.name + (courier.mobile ? ` (${courier.mobile})` : '')
+                })));
+            } catch (err) {
+                if (requestId !== confirmCourierSearchRequestId.current) return;
+                console.error('Failed to search courier partners:', err);
+                setConfirmCourierError(err.message || 'Failed to search courier partners. Please try again.');
+            } finally {
+                if (requestId === confirmCourierSearchRequestId.current) {
+                    setSearchingConfirmCouriers(false);
+                }
+            }
+        }, 300);
+    };
+
     const handleConfirmOrder = () => {
         if (!order || confirmingOrder) return;
+        if (confirmCourierSearchTimeout.current) {
+            clearTimeout(confirmCourierSearchTimeout.current);
+        }
+        confirmCourierSearchRequestId.current += 1;
+        setSearchingConfirmCouriers(false);
+        setConfirmCourierError('');
+        setConfirmCourierOptions([]);
+        setSelectedConfirmCourier('');
+        setSelectedConfirmCourierLabel('');
         setIsConfirmModalOpen(true);
+
+        if (order.deliveryType !== 'DIRECT') {
+            setLoadingConfirmCouriers(true);
+            courierApi.getCouriers({ onlyActive: true, pageSize: 100 })
+                .then(res => {
+                    const items = res?.data?.items || res?.items || [];
+                    const activeCouriers = Array.isArray(items)
+                        ? items.filter(courier => courier.isActive === true)
+                        : [];
+                    const courierOptions = activeCouriers.map(courier => ({
+                        edid: courier.edid,
+                        value: courier.edid,
+                        label: courier.name + (courier.mobile ? ` (${courier.mobile})` : '')
+                    }));
+                    setConfirmCourierOptions(courierOptions);
+                    setSelectedConfirmCourier(courierOptions[0]?.value || '');
+                    setSelectedConfirmCourierLabel(courierOptions[0]?.label || '');
+
+                    if (activeCouriers.length === 0) {
+                        setConfirmCourierError('No active courier partners are available. Add or activate a courier before confirming this order.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load courier partners:', err);
+                    setConfirmCourierError(err.message || 'Failed to load courier partners. Please try again.');
+                })
+                .finally(() => setLoadingConfirmCouriers(false));
+        }
     };
 
     const executeConfirmOrder = async () => {
         if (!order || confirmingOrder) return;
+        const requiresCourier = order.deliveryType !== 'DIRECT';
+        if (requiresCourier && !selectedConfirmCourier) {
+            setConfirmCourierError('Please select a courier partner before confirming this order.');
+            return;
+        }
+
         try {
             setConfirmingOrder(true);
-            await orderApi.confirmOrder(order.edid || order.id || id);
+            await orderApi.confirmOrder(order.edid || order.id || id, {
+                courierEdid: requiresCourier ? selectedConfirmCourier : null
+            });
+            setOrder(current => current ? { ...current, status: 'Confirmed' } : current);
             setIsConfirmModalOpen(false);
             reloadOrder();
         } catch (err) {
@@ -214,15 +315,21 @@ export default function OrderDetails() {
                 let orderData = null;
                 if (effectiveOrderNum) {
                     // Main targeted call: GET /api/orders/{orderNumber}/{orderEdid}
-                    const res = await orderApi.getOrderDetail(effectiveOrderNum, effectiveEdid);
+                    const res = await orderApi.getOrderDetail(effectiveOrderNum, effectiveEdid, {
+                        forceRefresh: refreshCounter > 0
+                    });
                     orderData = res?.data || res;
                 } else {
                     // Fallback only if orderNumber is unknown: fetch by ID first to resolve orderNumber
-                    const basicRes = await orderApi.getOrderById(effectiveEdid);
+                    const basicRes = await orderApi.getOrderById(effectiveEdid, {
+                        forceRefresh: refreshCounter > 0
+                    });
                     const basicOrder = basicRes?.data || basicRes;
                     const resolvedNum = basicOrder?.orderNumber || basicOrder?.orderNo;
                     if (resolvedNum) {
-                        const fullRes = await orderApi.getOrderDetail(resolvedNum, effectiveEdid);
+                        const fullRes = await orderApi.getOrderDetail(resolvedNum, effectiveEdid, {
+                            forceRefresh: refreshCounter > 0
+                        });
                         orderData = fullRes?.data || fullRes;
                         effectiveOrderNum = resolvedNum;
                     } else {
@@ -263,7 +370,7 @@ export default function OrderDetails() {
 
         let isMounted = true;
         setTrackingLoading(true);
-        orderApi.getOrderTracking(effectiveEdid)
+        orderApi.getOrderTracking(effectiveEdid, { forceRefresh: refreshCounter > 0 })
             .then(res => {
                 if (isMounted) {
                     const data = res?.data || res;
@@ -505,7 +612,7 @@ export default function OrderDetails() {
                         {isOrderPlaced && (
                             <button
                                 onClick={handleConfirmOrder}
-                                disabled={confirmingOrder}
+                                disabled={confirmingOrder || updatingStatus}
                                 className="flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow-xs cursor-pointer transition-all disabled:opacity-50"
                             >
                                 {confirmingOrder ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
@@ -1588,17 +1695,22 @@ export default function OrderDetails() {
                                                 {pendingStatus && (
                                                     <div className="mt-2.5">
                                                         <button
-                                                            disabled={confirmingOrder}
+                                                            disabled={confirmingOrder || updatingStatus}
                                                             onClick={async () => {
                                                                 if (pendingStatus.toLowerCase() === 'confirmed') {
-                                                                    await executeConfirmOrder();
+                                                                    handleConfirmOrder();
+                                                                    setPendingStatus(null);
                                                                 } else {
+                                                                    const statusToUpdate = pendingStatus;
                                                                     try {
+                                                                        setUpdatingStatus(true);
                                                                         await orderApi.updateStatus(order.edid || order.id || id, {
-                                                                            status: pendingStatus,
-                                                                            remarks: pendingStatus.toLowerCase() === 'delivered' ? 'Order delivered to customer' : `Status set to ${pendingStatus}`,
+                                                                            status: statusToUpdate,
+                                                                            remarks: statusToUpdate.toLowerCase() === 'delivered' ? 'Order delivered to customer' : `Status set to ${statusToUpdate}`,
                                                                             changedBy: currentUser?.name || currentUser?.userName || ''
                                                                         });
+                                                                        setOrder(current => current ? { ...current, status: statusToUpdate } : current);
+                                                                        setPendingStatus(null);
                                                                         reloadOrder();
                                                                     } catch (e) {
                                                                         console.error("Failed to update status on server:", e);
@@ -1607,13 +1719,14 @@ export default function OrderDetails() {
                                                                             title: 'Update Failed',
                                                                             message: e.message || 'Failed to update status.'
                                                                         });
+                                                                    } finally {
+                                                                        setUpdatingStatus(false);
                                                                     }
                                                                 }
-                                                                setPendingStatus(null);
                                                             }}
                                                             className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer transition-all active:scale-95 shadow-xs"
                                                         >
-                                                            {confirmingOrder ? <Loader2 size={13} className="animate-spin" /> : <Check size={12} strokeWidth={2.5} />}
+                                                            {confirmingOrder || updatingStatus ? <Loader2 size={13} className="animate-spin" /> : <Check size={12} strokeWidth={2.5} />}
                                                             {pendingStatus.toLowerCase() === 'confirmed' ? 'Confirm Order' : `Mark as ${formatOrderStatus(pendingStatus)}`}
                                                         </button>
                                                     </div>
@@ -1749,18 +1862,65 @@ export default function OrderDetails() {
                 initialType={printDocType}
             />
 
-            {/* Confirm Order Component Modal (replaces browser native window.confirm) */}
-            <ConfirmModal
+            {/* Confirm Order Modal */}
+            <Modal
                 isOpen={isConfirmModalOpen}
-                onClose={() => setIsConfirmModalOpen(false)}
-                onConfirm={executeConfirmOrder}
+                onClose={() => !confirmingOrder && setIsConfirmModalOpen(false)}
                 title="Confirm Order"
-                message={`Confirm Order #${order?.orderNumber}? This will verify the order and generate individual physical bottle records in OrderProductItem for the packing station.`}
-                confirmText="Confirm Order"
-                cancelText="Cancel"
-                variant="info"
-                isLoading={confirmingOrder}
-            />
+                className="max-w-md"
+            >
+                <div className="space-y-5">
+                    <p className="text-sm text-slate-600">
+                        Confirm order #{order?.orderNumber}? This will generate the physical bottle records for packing.
+                    </p>
+                    {order?.deliveryType !== 'DIRECT' && (
+                        <div className="space-y-2">
+                            <Dropdown
+                                label="Courier Partner"
+                                required
+                                value={selectedConfirmCourier}
+                                onChange={value => {
+                                    setSelectedConfirmCourier(String(value));
+                                    setSelectedConfirmCourierLabel(
+                                        confirmCourierOptions.find(option => String(option.value) === String(value))?.label || ''
+                                    );
+                                    setConfirmCourierError('');
+                                }}
+                                fallbackLabel={selectedConfirmCourierLabel}
+                                options={confirmCourierOptions}
+                                placeholder={loadingConfirmCouriers ? 'Loading courier partners...' : 'Select courier partner'}
+                                disabled={loadingConfirmCouriers || confirmingOrder}
+                                searchable
+                                onSearchChange={handleConfirmCourierSearchChange}
+                                menuPlacement="down"
+                            />
+                            {(loadingConfirmCouriers || searchingConfirmCouriers) && (
+                                <p className="text-xs text-slate-500">
+                                    {loadingConfirmCouriers ? 'Loading active courier partners...' : 'Searching courier partners...'}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {confirmCourierError && (
+                        <p className="text-xs font-medium text-red-600">{confirmCourierError}</p>
+                    )}
+                    <div className="flex justify-end gap-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setIsConfirmModalOpen(false)}
+                            disabled={confirmingOrder}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={executeConfirmOrder}
+                            disabled={confirmingOrder || loadingConfirmCouriers || (order?.deliveryType !== 'DIRECT' && !selectedConfirmCourier)}
+                        >
+                            {confirmingOrder ? 'Confirming...' : 'Confirm Order'}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
 
             {/* Cancel Order Modal with Required Remark */}
             <Modal
